@@ -5236,17 +5236,52 @@ public sealed class SimulationRuntimeAdmissionTests
                     out IReadOnlyList<P12AOwnerSection> coreP12FSections,
                     out P12AResult coreP12FEncodingResult), Is.True,
                 coreP12FEncodingResult?.SectionCode ?? coreP12FEncodingResult?.Code.ToString());
+            IReadOnlyList<OwnerSectionCensusSnapshot> receiptCensus = operation.SourceWitness.TokenOwnerSections;
+            OwnerSectionCensusSnapshot crimeReceiptCensus = receiptCensus.FirstOrDefault(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId);
+            OwnerSectionCensusSnapshot justiceReceiptCensus = receiptCensus.FirstOrDefault(section =>
+                section.SectionId == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId);
+            Assert.That(operation.TryEncodeCoreP12BP18ReceiptSections(
+                    out IReadOnlyList<P12AOwnerSection> ignoredCoreReceiptSections,
+                    out P12AResult coreP12BP18EncodingResult), Is.False,
+                "The mixed-roster Unity runtime must not encode P12-B receipts from a different Core owner identity.");
+            Assert.That(coreP12BP18EncodingResult?.SectionCode,
+                Is.EqualTo("p12b.core-p18-receipt-census-binding"));
+            Assert.That(ignoredCoreReceiptSections, Is.Null);
+            Assert.That(ReferenceEquals(crimeReceiptCensus?.OwnerInstanceIdentity,
+                runtime.CrimeSystemForWorldBoundary), Is.True,
+                "The mixed-roster P12 census retains the exact Unity compatibility CrimeSystem owner.");
+            Assert.That(ReferenceEquals(justiceReceiptCensus?.OwnerInstanceIdentity,
+                runtime.JusticeSystemForWorldBoundary), Is.True,
+                "The mixed-roster P12 census retains the exact Unity compatibility JusticeSystem owner.");
+            Assert.That(runtime.CrimeSystemForWorldBoundary.TryCaptureP12AReceiptOwnerSnapshot(
+                    out P12ACrimeReceiptOwnerSnapshot compatibilityCrimeReceiptSnapshot), Is.True);
+            Assert.That(runtime.JusticeSystemForWorldBoundary.TryCaptureP12AReceiptOwnerSnapshot(
+                    out P12AJusticeReceiptOwnerSnapshot compatibilityJusticeReceiptSnapshot), Is.True);
+            Assert.That(compatibilityCrimeReceiptSnapshot.CensusRevision,
+                Is.EqualTo(crimeReceiptCensus.Revision));
+            Assert.That(compatibilityJusticeReceiptSnapshot.CensusRevision,
+                Is.EqualTo(justiceReceiptCensus.Revision));
+            Assert.That(P12AReceiptOwnerCodec.TryEncode(
+                    compatibilityCrimeReceiptSnapshot, compatibilityJusticeReceiptSnapshot,
+                    out IReadOnlyList<P12AOwnerSection> compatibilityReceiptSections,
+                    out P12AResult compatibilityReceiptEncodingResult), Is.True,
+                compatibilityReceiptEncodingResult?.SectionCode
+                    ?? compatibilityReceiptEncodingResult?.Code.ToString());
+            List<P12AOwnerSection> adapterEncodedSections = new List<P12AOwnerSection>(adapterNpcSections);
+            adapterEncodedSections.AddRange(compatibilityReceiptSections);
             Assert.That(DailyV1Application.TryMergeCoreOwnedContinuationSections(
-                    coreBoundSections, coreP12ESections, coreP12FSections, adapterNpcSections,
+                    coreBoundSections, coreP12ESections, coreP12FSections,
+                    Array.Empty<P12AOwnerSection>(), adapterEncodedSections,
                     out IReadOnlyList<P12AOwnerSection> mergedSections,
                     out P12AResult mergeResult), Is.True,
                 mergeResult?.SectionCode ?? mergeResult?.Code.ToString());
             Assert.That(mergedSections.Select(section => section.Id).Distinct(StringComparer.Ordinal).Count(),
                 Is.EqualTo(mergedSections.Count),
                 "The mixed Core/adapter image section set has exactly one section for each identity.");
-            foreach (P12AOwnerSection adapterNpcSection in adapterNpcSections)
-                Assert.That(mergedSections.Any(section => section.Id == adapterNpcSection.Id), Is.True,
-                    "Core section composition retains each complete whole-roster adapter NPC section.");
+            foreach (P12AOwnerSection adapterSection in adapterEncodedSections)
+                Assert.That(mergedSections.Any(section => section.Id == adapterSection.Id), Is.True,
+                    "Core section composition retains each compatibility-owned receipt and whole-roster NPC section.");
             foreach (P12AOwnerSection coreSection in coreBoundSections
                          .Concat(coreP12ESections).Concat(coreP12FSections))
                 Assert.That(mergedSections.Any(section => ReferenceEquals(section, coreSection)), Is.True,

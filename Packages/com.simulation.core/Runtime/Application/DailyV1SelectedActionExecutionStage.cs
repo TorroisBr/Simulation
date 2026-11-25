@@ -516,11 +516,11 @@ internal static class DailyV1SelectedActionExecutionStage
         }
 
         /// <summary>
-        /// Creates the ordinary, non-commercial Travel boundary entirely from
-        /// the admitted Core owner graph and its complete P12 census. Unity
-        /// projection and event callbacks are deliberately absent from this
-        /// path; trade repositioning and commercial scouting continue through
-        /// their existing host adapter.
+        /// Creates an ordinary or exact active Merchant-plan Travel boundary
+        /// entirely from the admitted Core owner graph and its complete P12
+        /// census. Trade-reason travel is accepted only when its current Travel
+        /// and Merchant plan identities match; other host-specific travel
+        /// projections remain on the existing adapter path.
         /// </summary>
         internal static bool TryCreateCoreOnly(
             DailyV1ExecutionBoundaryState executionState,

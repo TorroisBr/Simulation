@@ -203,6 +203,10 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceHostPorts
         if (!DailyV1SelectedActorTurnExecutionContextFactory.TryValidateCoreOnlyStart(
                 candidateCoreSession.ExecutionBoundaryState,
                 candidateCoreSession.OwnerGraph,
+                allowRetainedPriorDayBuyGoodsActionSlot:
+                    preparation.Kind == DailyV1ApplicationStartPreparationKind.RestoreRequired,
+                allowRetainedPriorDayTradeTravelActionSlot:
+                    preparation.Kind == DailyV1ApplicationStartPreparationKind.RestoreRequired,
                 out diagnostic))
         {
             candidateHostPorts = null;
@@ -292,9 +296,11 @@ internal sealed class DailyV1CoreSelectedRuntimeAdvanceHostPorts
     {
         diagnostic = null;
         if (!IsBoundToCurrentSession()
-            || !ExecutionState.CoreMutationGuardAuthoritiesBound)
+            || !ExecutionState.SelectedCoreOwnerMutationGuardAuthoritiesBound
+            || ExecutionState.CoreMutationGuardAuthoritiesBound
+            || !ExecutionState.TryMarkCoreMutationGuardAuthoritiesBound())
         {
-            diagnostic = "The restored Core owner mutation authorities were not bound to this exact graph.";
+            diagnostic = "The restored Core owner mutation authorities could not finalize their guard binding for this exact graph.";
             return false;
         }
         return true;

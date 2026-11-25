@@ -1141,16 +1141,26 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         DailyV1ActionDefinition action) =>
+        IsExactCoreLocalBuyGoodsActionSlot(
+            graph, actor, action, requireCurrentCityMatch: true);
+
+    internal static bool IsExactCoreLocalBuyGoodsActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action,
+        bool requireCurrentCityMatch) =>
         action != null
         && ReferenceEquals(actor?.ActionSlot?.CurrentAction, action)
         && IsExactCoreLocalBuyGoodsPayload(
-            graph, actor, actor?.ActionSlot?.CurrentPayload, requireInstalledSlot: true);
+            graph, actor, actor?.ActionSlot?.CurrentPayload,
+            requireInstalledSlot: true, requireCurrentCityMatch);
 
     internal static bool IsExactCoreLocalBuyGoodsPayload(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload,
-        bool requireInstalledSlot)
+        bool requireInstalledSlot,
+        bool requireCurrentCityMatch = true)
     {
         if (graph == null || actor == null || payload?.Action == null
             || !graph.ContainsExactNpcOwner(actor)
@@ -1166,8 +1176,9 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             || !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
             || payload.TravelReason != NpcTravelReason.None
             || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
-            || !string.Equals(payload.TargetCityRuntimeId,
-                actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal)
+            || (requireCurrentCityMatch
+                && !string.Equals(payload.TargetCityRuntimeId,
+                    actor.Travel.CurrentCityRuntimeId, StringComparison.Ordinal))
             || payload.Action.Values.actionType?.Value
                 != DailyV1NpcDefinitionRules.BuyGoodsActionTypeValue
             || !graph.Definitions.Actions.TryGetValue(
@@ -1210,7 +1221,6 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             || !ReferenceEquals(payload.Action, action)
             || payload.TargetItem != null
             || !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
-            || payload.TravelReason != NpcTravelReason.None
             || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
             || action.Values.actionType?.Value
                 != DailyV1NpcDefinitionRules.TravelActionTypeValue
@@ -1225,7 +1235,6 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             || actor.Lifecycle?.LifeState != NpcLifeState.Alive
             || actor.Travel == null || actor.Travel.IsTraveling
             || actor.MoneyAccount == null || actor.TravelPlan == null
-            || actor.MerchantTradePlan?.IsActive == true
             || graph.TravelParties == null
             || graph.IsManagedByTravelParty(actor, graph.TravelParties)
             || !graph.IsActorAtCurrentCityLocation(actor)
@@ -1254,7 +1263,56 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             || route == null || !actor.MoneyAccount.CanDebit(cost))
             return false;
 
-        return true;
+        if (payload.TravelReason == NpcTravelReason.None)
+            return actor.MerchantTradePlan?.IsActive != true;
+
+        return payload.TravelReason == NpcTravelReason.Trade
+            && IsExactCoreOnlyMerchantTradeTravelIntent(
+                graph, actor, payload, destinationLocationRuntimeId, cost,
+                requirePendingTravelPlan: true);
+    }
+
+    private static bool IsExactCoreOnlyMerchantTradeTravelIntent(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1NpcActionPayloadOwner payload,
+        string destinationLocationRuntimeId,
+        float travelCost,
+        bool requirePendingTravelPlan)
+    {
+        DailyV1NpcMerchantTradePlanOwner merchant = actor?.MerchantTradePlan;
+        DailyV1NpcTravelPlanOwner travelPlan = actor?.TravelPlan;
+        if (graph == null || actor == null || payload == null
+            || merchant?.IsActive != true
+            || !ReferenceEquals(merchant.Definitions, graph.Definitions)
+            || merchant.ItemDefinition == null
+            || !graph.Definitions.Items.TryGetValue(
+                merchant.ItemDefinition.DefinitionId,
+                out DailyV1ItemDefinition admittedItem)
+            || !ReferenceEquals(admittedItem, merchant.ItemDefinition)
+            || payload.TravelReason != NpcTravelReason.Trade
+            || payload.Amount != 0
+            || !payload.ExpectedUnitPrice.Equals(travelCost)
+            || !payload.SuccessChanceMultiplier.Equals(1f)
+            || payload.ExpectedNetValue != 0f
+            || payload.CommercialDecisionEvidence != null
+            || payload.CommercialScoutingEvidence != null
+            || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+            || !string.Equals(payload.TargetCityRuntimeId,
+                merchant.TargetCityRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(payload.OriginDecisionId,
+                merchant.OriginDecisionId, StringComparison.Ordinal))
+            return false;
+
+        if (!requirePendingTravelPlan) return true;
+        return travelPlan != null
+            && travelPlan.Reason == NpcTravelReason.Trade
+            && string.Equals(travelPlan.TargetCityRuntimeId,
+                merchant.TargetCityRuntimeId, StringComparison.Ordinal)
+            && string.Equals(travelPlan.TargetLocationRuntimeId,
+                destinationLocationRuntimeId, StringComparison.Ordinal)
+            && string.Equals(travelPlan.OriginDecisionId,
+                merchant.OriginDecisionId, StringComparison.Ordinal);
     }
 
     internal static bool IsExactCoreOnlySoloTravelDispatchResult(
@@ -1275,7 +1333,6 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             || !ReferenceEquals(payload.Action, action)
             || payload.TargetItem != null
             || !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
-            || payload.TravelReason != NpcTravelReason.None
             || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
             || action.Values.actionType?.Value
                 != DailyV1NpcDefinitionRules.TravelActionTypeValue
@@ -1286,6 +1343,13 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
             || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
                 graph.Definitions, action, actor.Status?.Statuses))
             return false;
+
+        bool tradeTravel = payload.TravelReason == NpcTravelReason.Trade
+            && IsExactCoreOnlyMerchantTradeTravelIntent(
+                graph, actor, payload, null, payload.ExpectedUnitPrice,
+                requirePendingTravelPlan: false);
+        if (payload.TravelReason != NpcTravelReason.None && !tradeTravel) return false;
+        if (!tradeTravel && actor.MerchantTradePlan?.IsActive == true) return false;
 
         if (!result.ActionRollSucceeded)
             return !result.Succeeded && result.Travel == null;
@@ -1316,7 +1380,6 @@ internal sealed class DailyV1CoreSelectedActorTurnExecutionBoundary
                 StringComparison.Ordinal)
             && plan.TravelDaysTotal == travel.Route.TravelDays;
     }
-
     private bool IsExactCoreLocalSellGoodsPayload(
         DailyV1NpcRuntimeOwners actor,
         DailyV1NpcActionPayloadOwner payload) =>

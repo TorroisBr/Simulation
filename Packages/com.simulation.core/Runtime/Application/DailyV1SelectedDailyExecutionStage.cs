@@ -706,7 +706,9 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         if (executionState == null || graph == null
             || !executionState.TryBindSelectedCrimeJusticeDailyMutationBindingFromCoreCensus(graph)
             || !CanExecuteCoreOnlyActorTurn(
-                executionState, graph, requireActiveDailyAdvanceScope: true, out _)
+                executionState, graph, requireActiveDailyAdvanceScope: true, out _,
+                allowRetainedPriorDayBuyGoodsActionSlot: true,
+                allowRetainedPriorDayTradeTravelActionSlot: true)
             || graph.PersonStore == null
             || executionState.SelectedActorChoiceStore == null
             || !ReferenceEquals(executionState.SelectedActorChoiceStore.PersonStore, graph.PersonStore))
@@ -758,6 +760,26 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
     internal static bool TryValidateCoreOnlyStart(
         DailyV1ExecutionBoundaryState executionState,
         DailyV1SelectedRuntimeOwnerGraph graph,
+        out string diagnostic) =>
+        TryValidateCoreOnlyStart(
+            executionState, graph,
+            allowRetainedPriorDayBuyGoodsActionSlot: false,
+            out diagnostic);
+
+    internal static bool TryValidateCoreOnlyStart(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        bool allowRetainedPriorDayBuyGoodsActionSlot,
+        out string diagnostic) =>
+        TryValidateCoreOnlyStart(
+            executionState, graph, allowRetainedPriorDayBuyGoodsActionSlot,
+            allowRetainedPriorDayTradeTravelActionSlot: false, out diagnostic);
+
+    internal static bool TryValidateCoreOnlyStart(
+        DailyV1ExecutionBoundaryState executionState,
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        bool allowRetainedPriorDayBuyGoodsActionSlot,
+        bool allowRetainedPriorDayTradeTravelActionSlot,
         out string diagnostic)
     {
         diagnostic = null;
@@ -773,7 +795,10 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             return false;
         }
         if (!CanExecuteCoreOnlyActorTurn(
-                executionState, graph, requireActiveDailyAdvanceScope: false, out string actorTurnDiagnostic))
+                executionState, graph, requireActiveDailyAdvanceScope: false,
+                out string actorTurnDiagnostic,
+                allowRetainedPriorDayBuyGoodsActionSlot,
+                allowRetainedPriorDayTradeTravelActionSlot))
         {
             diagnostic = "The prepared selected profile is outside the detached Core-only actor-turn envelope: "
                 + actorTurnDiagnostic;
@@ -791,7 +816,9 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
         DailyV1ExecutionBoundaryState executionState,
         DailyV1SelectedRuntimeOwnerGraph graph,
         bool requireActiveDailyAdvanceScope,
-        out string diagnostic)
+        out string diagnostic,
+        bool allowRetainedPriorDayBuyGoodsActionSlot = false,
+        bool allowRetainedPriorDayTradeTravelActionSlot = false)
     {
         diagnostic = null;
         if (executionState == null || graph == null
@@ -948,7 +975,20 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
                 || IsProjectionIndependentCoreLocalSellGoodsActionSlot(
                     executionState, graph, actor, installed)
                 || IsProjectionIndependentCoreLocalBuyGoodsActionSlot(
-                    executionState, graph, actor, installed))
+                    executionState, graph, actor, installed)
+                // The saved current-action slot is prior intent, not a command to execute again.
+                // Daily actor processing selects or clears the current action before dispatch;
+                // exact target identity is still required, and execution still checks locality.
+                || (allowRetainedPriorDayBuyGoodsActionSlot
+                    && !string.Equals(
+                        actor.ActionSlot.CurrentPayload?.TargetCityRuntimeId,
+                        actor.Travel?.CurrentCityRuntimeId, StringComparison.Ordinal)
+                    && IsProjectionIndependentCoreLocalBuyGoodsActionSlot(
+                        executionState, graph, actor, installed,
+                        requireCurrentCityMatch: false))
+                || (allowRetainedPriorDayTradeTravelActionSlot
+                    && IsProjectionIndependentRetainedCoreMerchantTravelActionSlot(
+                        graph, actor, installed)))
                 continue;
             diagnostic = "an installed actor action is not supported by the host-neutral execution boundary: "
                 + actor.RuntimeId + " / " + installed.DefinitionId;
@@ -957,6 +997,78 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
 
         diagnostic = null;
         return true;
+    }
+
+    private static bool IsProjectionIndependentRetainedCoreMerchantTravelActionSlot(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        DailyV1NpcRuntimeOwners actor,
+        DailyV1ActionDefinition action)
+    {
+        DailyV1NpcActionPayloadOwner payload = actor?.ActionSlot?.CurrentPayload;
+        DailyV1NpcTravelOwner travel = actor?.Travel;
+        DailyV1NpcTravelPlanOwner travelPlan = actor?.TravelPlan;
+        DailyV1NpcMerchantTradePlanOwner merchant = actor?.MerchantTradePlan;
+        if (graph == null || actor == null || action == null || payload == null
+            || !graph.ContainsExactNpcOwner(actor)
+            || !ReferenceEquals(actor.Definitions, graph.Definitions)
+            || !ReferenceEquals(actor.ActionSlot?.CurrentAction, action)
+            || !ReferenceEquals(payload.Action, action)
+            || action.Values.actionType?.Value != DailyV1NpcDefinitionRules.TravelActionTypeValue
+            || !graph.Definitions.Actions.TryGetValue(
+                action.DefinitionId, out DailyV1ActionDefinition exactAction)
+            || !ReferenceEquals(exactAction, action)
+            || !DailyV1NpcDefinitionRules.IsAdmittedAction(graph.Definitions, action)
+            || !DailyV1SelectedNpcActionDecisionStage.IsEnabledForAutonomousSelection(
+                graph.Definitions, action)
+            || !DailyV1NpcDefinitionRules.HasRequiredActionStatuses(
+                graph.Definitions, action, actor.Status?.Statuses)
+            || actor.Lifecycle?.LifeState != NpcLifeState.Alive
+            || travel == null || travelPlan == null
+            || !travelPlan.Matches(null, null, NpcTravelReason.None, 0f, 0f, null)
+            || merchant?.IsActive != true
+            || !ReferenceEquals(merchant.Definitions, graph.Definitions)
+            || merchant.ItemDefinition == null
+            || !graph.Definitions.Items.TryGetValue(
+                merchant.ItemDefinition.DefinitionId,
+                out DailyV1ItemDefinition admittedItem)
+            || !ReferenceEquals(admittedItem, merchant.ItemDefinition)
+            || payload.TravelReason != NpcTravelReason.Trade
+            || payload.TargetItem != null
+            || !string.IsNullOrWhiteSpace(payload.TargetNpcRuntimeId)
+            || payload.Amount != 0
+            || float.IsNaN(payload.ExpectedUnitPrice)
+            || float.IsInfinity(payload.ExpectedUnitPrice)
+            || payload.ExpectedUnitPrice < 0f
+            || !payload.SuccessChanceMultiplier.Equals(1f)
+            || payload.ExpectedNetValue != 0f
+            || payload.CommercialDecisionEvidence != null
+            || payload.CommercialScoutingEvidence != null
+            || string.IsNullOrWhiteSpace(payload.TargetCityRuntimeId)
+            || !string.Equals(payload.TargetCityRuntimeId,
+                merchant.TargetCityRuntimeId, StringComparison.Ordinal)
+            || !string.Equals(payload.OriginDecisionId,
+                merchant.OriginDecisionId, StringComparison.Ordinal)
+            || !graph.TryGetCityLocationRuntimeId(
+                payload.TargetCityRuntimeId, out string destinationLocationRuntimeId)
+            || graph.TravelParties == null
+            || graph.IsManagedByTravelParty(actor, graph.TravelParties))
+            return false;
+
+        if (travel.IsTraveling)
+            return string.Equals(travel.DestinationCityRuntimeId,
+                    payload.TargetCityRuntimeId, StringComparison.Ordinal)
+                && string.Equals(travel.DestinationLocationRuntimeId,
+                    destinationLocationRuntimeId, StringComparison.Ordinal)
+                && travel.TravelDaysRemaining > 0
+                && travel.TravelDaysTotal >= travel.TravelDaysRemaining
+                && string.Equals(travel.TravelOriginDecisionId,
+                    payload.OriginDecisionId, StringComparison.Ordinal)
+                && string.IsNullOrWhiteSpace(travel.ActiveTravelPartyId);
+
+        return string.Equals(travel.CurrentCityRuntimeId,
+                payload.TargetCityRuntimeId, StringComparison.Ordinal)
+            && string.Equals(travel.CurrentLocationRuntimeId,
+                destinationLocationRuntimeId, StringComparison.Ordinal);
     }
 
     private static bool IsProjectionIndependentCoreLocalSellGoodsActionSlot(
@@ -972,15 +1084,18 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
 
         DailyV1NpcActionPayloadOwner payload = actor.ActionSlot.CurrentPayload;
         if (string.IsNullOrWhiteSpace(payload?.OriginDecisionId)
-            || executionState.SelectedActorChoiceStore == null
-            || executionState.SelectedDecisionStore == null)
+            || executionState.SelectedActorChoiceStore == null)
             return false;
 
-        foreach (NpcDecisionRecord decision in executionState.SelectedDecisionStore.Decisions)
+        bool decisionRecordExists = false;
+        foreach (NpcDecisionRecord decision in executionState.SelectedDecisionStore?.Decisions
+            ?? Array.Empty<NpcDecisionRecord>())
         {
             if (decision == null
-                || !string.Equals(decision.DecisionId, payload.OriginDecisionId, StringComparison.Ordinal)
-                || !string.Equals(decision.ActorRuntimeId, actor.RuntimeId, StringComparison.Ordinal)
+                || !string.Equals(decision.DecisionId, payload.OriginDecisionId, StringComparison.Ordinal))
+                continue;
+            decisionRecordExists = true;
+            if (!string.Equals(decision.ActorRuntimeId, actor.RuntimeId, StringComparison.Ordinal)
                 || !string.Equals(decision.ActionDefinitionId, action.DefinitionId, StringComparison.Ordinal))
                 continue;
 
@@ -1032,30 +1147,69 @@ internal static class DailyV1SelectedActorTurnExecutionContextFactory
             }
         }
 
-        return false;
+        if (decisionRecordExists) return false;
+
+        // P12 retains the exact current-action payload and its origin identity,
+        // but this selected profile intentionally omits the full decision
+        // store. The durable choice store still distinguishes a prior player
+        // dispatch from an autonomous SellGoods slot; never infer autonomy
+        // when that identity is present.
+        foreach (ActorChoiceInput input in executionState.SelectedActorChoiceStore.Inputs)
+        {
+            if (input?.Dispositions == null) continue;
+            foreach (ActorChoiceDisposition disposition in input.Dispositions)
+                if (disposition != null
+                    && string.Equals(disposition.DecisionRecordId,
+                        payload.OriginDecisionId, StringComparison.Ordinal))
+                    return false;
+        }
+        return true;
     }
 
     private static bool IsProjectionIndependentCoreLocalBuyGoodsActionSlot(
         DailyV1ExecutionBoundaryState executionState,
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
-        DailyV1ActionDefinition action)
+        DailyV1ActionDefinition action,
+        bool requireCurrentCityMatch = true)
     {
         if (executionState?.SelectedDecisionStore == null || actor == null || action == null
             || !DailyV1CoreSelectedActorTurnExecutionBoundary.IsExactCoreLocalBuyGoodsActionSlot(
-                graph, actor, action))
+                graph, actor, action, requireCurrentCityMatch))
             return false;
 
         string decisionId = actor.ActionSlot.CurrentPayload?.OriginDecisionId;
         if (string.IsNullOrWhiteSpace(decisionId)) return false;
         foreach (NpcDecisionRecord decision in executionState.SelectedDecisionStore.Decisions)
             if (decision != null
-                && string.Equals(decision.DecisionId, decisionId, StringComparison.Ordinal)
-                && string.Equals(decision.ActorRuntimeId, actor.RuntimeId, StringComparison.Ordinal)
-                && string.Equals(decision.ActionDefinitionId, action.DefinitionId, StringComparison.Ordinal))
-                return decision.Origin == NpcDecisionOrigin.Autonomous;
-        return false;
+                && string.Equals(decision.DecisionId, decisionId, StringComparison.Ordinal))
+                return string.Equals(decision.ActorRuntimeId, actor.RuntimeId, StringComparison.Ordinal)
+                    && string.Equals(decision.ActionDefinitionId, action.DefinitionId, StringComparison.Ordinal)
+                    && decision.Origin == NpcDecisionOrigin.Autonomous;
+
+        // P12 persists the exact current-action payload and its opaque
+        // OriginDecisionId, but this accepted profile intentionally does not
+        // persist the full NpcDecisionStore. A detached restore therefore may
+        // retain a valid autonomous BuyGoods slot whose decision record is no
+        // longer available. The persisted ActorChoiceStore is authoritative
+        // for the relevant negative case: never reinterpret a retained
+        // actor-choice dispatch as autonomous just because its decision
+        // record was omitted.
+        ActorChoiceStore actorChoices = executionState.SelectedActorChoiceStore;
+        if (actorChoices == null) return false;
+        foreach (ActorChoiceInput input in actorChoices.Inputs)
+        {
+            if (input?.Dispositions == null) continue;
+            foreach (ActorChoiceDisposition disposition in input.Dispositions)
+                if (disposition != null
+                    && string.Equals(disposition.DecisionRecordId, decisionId,
+                        StringComparison.Ordinal))
+                    return false;
+        }
+
+        return true;
     }
+
     private static bool IsProjectionIndependentCoreHideAction(
         DailyV1SelectedRuntimeOwnerGraph graph,
         DailyV1NpcRuntimeOwners actor,
@@ -1826,9 +1980,19 @@ internal static class DailyV1SelectedDailyExecutionStage
                     throw new InvalidOperationException(
                         "The selected Core Crime/Justice day-start stage rejected its exact owner graph.");
 
+                IDailyV1SelectedMerchantTradeStateAdmissionBoundary merchantAdmissionBoundary =
+                    admittedSelectedExecution
+                        ? actorTurnContext?.Boundary as IDailyV1SelectedMerchantTradeStateAdmissionBoundary
+                        : null;
+                if (admittedSelectedExecution
+                    && graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled
+                    && merchantAdmissionBoundary == null)
+                    throw new InvalidOperationException(
+                        "The admitted Core runtime omitted its MerchantDailyTrade P12 operation boundary.");
                 if (graph.Definitions.EffectiveConfiguration.MerchantTrade.Enabled
                     && !DailyV1SelectedMerchantTradeStateOperation.TryAdvancePendingTravelDays(
-                        graph, exactNpcOwners, dayStartContext.MerchantTradeBoundary))
+                        graph, exactNpcOwners, dayStartContext.MerchantTradeBoundary,
+                        merchantAdmissionBoundary))
                     throw new InvalidOperationException(
                         "The selected Core Merchant plan-urgency stage rejected its exact owner graph.");
             }

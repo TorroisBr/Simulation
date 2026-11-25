@@ -120,6 +120,36 @@ public sealed class DailyV1ApplicationHostTests
         public void Delete(string path) => throw new NotSupportedException();
     }
 
+    private sealed class CorruptNextAtomicSlotReadOperations : IAtomicFileSlotOperations
+    {
+        private readonly IAtomicFileSlotOperations inner = SystemAtomicFileSlotOperations.Instance;
+
+        internal bool CorruptNextRead { get; set; }
+
+        public void CreateDirectory(string path) => inner.CreateDirectory(path);
+        public bool Exists(string path) => inner.Exists(path);
+        public Stream CreateNewTemporary(string path) => inner.CreateNewTemporary(path);
+        public Stream OpenRead(string path)
+        {
+            Stream original = inner.OpenRead(path);
+            if (!CorruptNextRead) return original;
+
+            CorruptNextRead = false;
+            using (original)
+            using (var copy = new MemoryStream())
+            {
+                original.CopyTo(copy);
+                byte[] bytes = copy.ToArray();
+                if (bytes.Length > 0) bytes[0] ^= 0x80;
+                return new MemoryStream(bytes, writable: false);
+            }
+        }
+        public void FlushToDisk(Stream stream) => inner.FlushToDisk(stream);
+        public void Replace(string source, string destination) => inner.Replace(source, destination);
+        public void Move(string source, string destination) => inner.Move(source, destination);
+        public void Delete(string path) => inner.Delete(path);
+    }
+
     private sealed class TestHostProjection : IDailyV1ApplicationHostProjection
     {
         internal TestHostProjection(DailyV1ActiveRuntimeSession coreRuntimeSession)
@@ -1163,6 +1193,191 @@ public sealed class DailyV1ApplicationHostTests
             "Equivalent host-neutral Core Genesis and daily execution must produce the same ordered owner facts.");
         Assert.That(application.ActiveSession, Is.SameAs(preparation.CoreSession),
             "A successful daily advance must retain the same authoritative Core session.");
+    }
+
+    [Test]
+    public void CoreSessionDurablySavesRestoresContinuesAndPreservesPriorSlotOnRejectedReplace()
+    {
+        string persistentRoot = Path.Combine(AppContext.BaseDirectory,
+            "coref-p12-durable-" + Guid.NewGuid().ToString("N"));
+        var fileOperations = new CorruptNextAtomicSlotReadOperations();
+        DailyV1EffectiveDefinitions definitions =
+            DailyV1CapturedSelectedContentFixture.CreateDefinitions();
+        DailyV1HostEnvironmentIdentity identity = DotNetIdentity();
+        var host = new DailyV1ApplicationHost(
+            persistentRoot, fileOperations, stageCompleted: null,
+            logOutput: null, dotNetIdentity: identity);
+        var sourceApplication = new DailyV1Application();
+        DailyV1ActiveRuntimeSession sourceSession = null;
+        try
+        {
+            Assert.That(sourceApplication.TryStartDotNetOnExistingApplication(
+                    definitions, host,
+                    out DailyV1ApplicationStartPreparation sourcePreparation,
+                    out P12AResult initialResult,
+                    out string startDiagnostic), Is.True, startDiagnostic);
+            Assert.That(initialResult.Code, Is.EqualTo(P12AResultCode.NoSave));
+            sourceSession = sourcePreparation.CoreSession;
+            Assert.That(sourceApplication.TryAdvanceDay(
+                    out SimulationRuntimeAdvanceFailure firstAdvanceFailure), Is.True,
+                firstAdvanceFailure.ToString());
+            long savedDay = sourceSession.SimulationTime.AbsoluteDay;
+            long savedSequence = sourceSession.ExecutionBoundaryState.CompletedCoreSequence;
+            long savedEpoch = sourceSession.ExecutionBoundaryState.MutationEpochState.CurrentEpoch;
+            DailyV1NpcRuntimeOwners[] persistedBuyActors = sourceSession.OwnerGraph.Npcs.Where(actor =>
+                string.Equals(actor?.ActionSlot?.CurrentAction?.DefinitionId,
+                    "COMPRAR_MERCADORIA", StringComparison.Ordinal)).ToArray();
+            Assert.That(persistedBuyActors, Is.Not.Empty);
+            Assert.That(persistedBuyActors.Any(actor =>
+                !string.Equals(actor.Travel.CurrentCityRuntimeId,
+                    actor.ActionSlot.CurrentPayload.TargetCityRuntimeId, StringComparison.Ordinal)),
+                Is.True,
+                "The fixture preserves a local BuyGoods slot after its actor changed City.");
+            Dictionary<string, string> savedBuyActorCurrentCities = persistedBuyActors.ToDictionary(
+                actor => actor.RuntimeId,
+                actor => actor.Travel.CurrentCityRuntimeId,
+                StringComparer.Ordinal);
+            Dictionary<string, string> savedBuyActionTargetCities = persistedBuyActors.ToDictionary(
+                actor => actor.RuntimeId,
+                actor => actor.ActionSlot.CurrentPayload.TargetCityRuntimeId,
+                StringComparer.Ordinal);
+            Dictionary<string, string> savedBuyActionDecisionIds = persistedBuyActors.ToDictionary(
+                actor => actor.RuntimeId,
+                actor => actor.ActionSlot.CurrentPayload.OriginDecisionId,
+                StringComparer.Ordinal);
+            foreach (DailyV1NpcRuntimeOwners persistedBuyActor in persistedBuyActors)
+            {
+                string persistedBuyDecisionId = persistedBuyActor.ActionSlot.CurrentPayload?.OriginDecisionId;
+                Assert.That(string.IsNullOrWhiteSpace(persistedBuyDecisionId), Is.False);
+                Assert.That(sourceSession.ExecutionBoundaryState.SelectedDecisionStore.TryGetDecision(
+                    persistedBuyDecisionId, out NpcDecisionRecord sourceBuyDecision), Is.True);
+                Assert.That(sourceBuyDecision.Origin, Is.EqualTo(NpcDecisionOrigin.Autonomous));
+            }
+
+            Assert.That(sourceApplication.TrySaveDotNetContinuation(
+                    out P12AResult saveResult, out string saveDiagnostic), Is.True,
+                $"{saveResult?.Code}:{saveResult?.SectionCode}/{saveResult?.StableOwnerKey} {saveDiagnostic}");
+            Assert.That(saveResult.Code, Is.EqualTo(P12AResultCode.Saved));
+            string slotPath = P12AContinuationStore.SlotPath(persistentRoot);
+            byte[] dayOneBytes = File.ReadAllBytes(slotPath);
+            Assert.That(dayOneBytes, Is.Not.Empty);
+            Assert.That(DailyV1CompatibilityDescriptorFactory.TryCreateDotNetV2(
+                    definitions, identity,
+                    out P12ACompatibilityDescriptorV2 descriptor,
+                    out string descriptorDiagnostic), Is.True, descriptorDiagnostic);
+            Assert.That(P12AContinuationStore.TryLoadDotNetV2(
+                    null, descriptor, persistentRoot, fileOperations,
+                    out P12AContinuationImage decodedImage,
+                    out P12AResult decodeResult), Is.True, decodeResult?.Code.ToString());
+            Assert.That(decodeResult.Code, Is.EqualTo(P12AResultCode.Loaded));
+            Assert.That(decodedImage.Header.Day, Is.EqualTo(savedDay));
+            Assert.That(decodedImage.Header.Sequence, Is.EqualTo(savedSequence));
+            Assert.That(decodedImage.Header.PoliticalWorldRevision,
+                Is.EqualTo(sourceSession.PoliticalWorldRevision));
+
+            Assert.That(sourceApplication.TryAdvanceDay(
+                    out SimulationRuntimeAdvanceFailure controlAdvanceFailure), Is.True,
+                controlAdvanceFailure.ToString());
+
+            // Restore through the production startup/load transaction while
+            // the original session remains alive, then compare after both
+            // executions continue from the same saved boundary.
+            var restoredApplication = new DailyV1Application();
+            Assert.That(restoredApplication.TryStartDotNetOnExistingApplication(
+                    definitions, host,
+                    out DailyV1ApplicationStartPreparation restoredPreparation,
+                    out P12AResult restoreResult,
+                    out string restoreDiagnostic), Is.True, restoreDiagnostic);
+            Assert.That(restoreResult.Code, Is.EqualTo(P12AResultCode.Loaded));
+            DailyV1ActiveRuntimeSession restoredSession = restoredApplication.ActiveSession;
+            Assert.That(restoredApplication.ActiveSession, Is.SameAs(restoredSession));
+            Assert.That(restoredSession, Is.Not.SameAs(sourceSession));
+            Assert.That(restoredSession.ExecutionBoundaryState,
+                Is.Not.SameAs(sourceSession.ExecutionBoundaryState));
+            Assert.That(restoredSession.OwnerGraph, Is.Not.SameAs(sourceSession.OwnerGraph));
+            Assert.That(restoredSession.OwnerGraph.Cities[0],
+                Is.Not.SameAs(sourceSession.OwnerGraph.Cities[0]));
+            Assert.That(restoredSession.WorldId.Value, Is.EqualTo(sourceSession.WorldId.Value));
+            Assert.That(restoredSession.SimulationTime.AbsoluteDay, Is.EqualTo(savedDay));
+            Assert.That(restoredSession.ExecutionBoundaryState.CompletedCoreSequence,
+                Is.EqualTo(savedSequence));
+            Assert.That(restoredSession.PoliticalWorldRevision,
+                Is.EqualTo(sourceSession.PoliticalWorldRevision));
+            Assert.That(restoredSession.ExecutionBoundaryState.MutationEpochState.CurrentEpoch,
+                Is.Not.EqualTo(savedEpoch),
+                "The detached graph has fresh runtime epoch state rather than reusing source process state.");
+            foreach (DailyV1NpcRuntimeOwners persistedBuyActor in persistedBuyActors)
+            {
+                string persistedBuyDecisionId = savedBuyActionDecisionIds[persistedBuyActor.RuntimeId];
+                DailyV1NpcRuntimeOwners restoredBuyActor = restoredSession.OwnerGraph.Npcs.Single(actor =>
+                    string.Equals(actor?.RuntimeId, persistedBuyActor.RuntimeId, StringComparison.Ordinal));
+                Assert.That(restoredBuyActor.ActionSlot.CurrentAction.DefinitionId,
+                    Is.EqualTo("COMPRAR_MERCADORIA"));
+                Assert.That(restoredBuyActor.ActionSlot.CurrentPayload.OriginDecisionId,
+                    Is.EqualTo(persistedBuyDecisionId),
+                    "P12 retains the exact current-action origin identity on the owner payload.");
+                Assert.That(restoredBuyActor.Travel.CurrentCityRuntimeId,
+                    Is.EqualTo(savedBuyActorCurrentCities[persistedBuyActor.RuntimeId]),
+                    "Detached P12 restoration preserves the exact current City owner binding.");
+                Assert.That(restoredBuyActor.ActionSlot.CurrentPayload.TargetCityRuntimeId,
+                    Is.EqualTo(savedBuyActionTargetCities[persistedBuyActor.RuntimeId]),
+                    "Detached P12 restoration preserves the exact action target City identity.");
+                Assert.That(restoredSession.ExecutionBoundaryState.SelectedDecisionStore.TryGetDecision(
+                    persistedBuyDecisionId, out _), Is.False,
+                    "The selected P12 profile deliberately retains this decision reference without restoring the full NpcDecisionStore.");
+            }
+
+            Assert.That(restoredApplication.TryAdvanceDay(
+                    out SimulationRuntimeAdvanceFailure resumedAdvanceFailure), Is.True,
+                resumedAdvanceFailure.ToString());
+            Assert.That(restoredSession.SimulationTime.AbsoluteDay,
+                Is.EqualTo(sourceSession.SimulationTime.AbsoluteDay));
+            Assert.That(restoredSession.ExecutionBoundaryState.CompletedCoreSequence,
+                Is.EqualTo(sourceSession.ExecutionBoundaryState.CompletedCoreSequence));
+
+            Assert.That(sourceApplication.TrySaveDotNetContinuation(
+                    out P12AResult controlSaveResult, out string controlSaveDiagnostic), Is.True,
+                $"{controlSaveResult?.Code}:{controlSaveResult?.SectionCode}/{controlSaveResult?.StableOwnerKey} {controlSaveDiagnostic}");
+            byte[] uninterruptedBytes = File.ReadAllBytes(slotPath);
+            Assert.That(restoredApplication.TrySaveDotNetContinuation(
+                    out P12AResult resumedSaveResult, out string resumedSaveDiagnostic), Is.True,
+                $"{resumedSaveResult?.Code}:{resumedSaveResult?.SectionCode}/{resumedSaveResult?.StableOwnerKey} {resumedSaveDiagnostic}");
+            byte[] resumedBytes = File.ReadAllBytes(slotPath);
+            CollectionAssert.AreEqual(uninterruptedBytes, resumedBytes,
+                "A detached restore followed by one daily advance produces the exact same canonical P12 bytes as uninterrupted execution.");
+
+            // A failed reread of this attempt's temporary frame must not
+            // replace the already valid day-two slot or roll back the running
+            // source session's completed day.
+            Assert.That(sourceApplication.TryAdvanceDay(
+                    out SimulationRuntimeAdvanceFailure postSaveAdvanceFailure), Is.True,
+                postSaveAdvanceFailure.ToString());
+            DailyV1ActiveRuntimeSession liveBeforeRejectedSave = sourceApplication.ActiveSession;
+            fileOperations.CorruptNextRead = true;
+            Assert.That(sourceApplication.TrySaveDotNetContinuation(
+                    out P12AResult rejectedSaveResult), Is.False);
+            Assert.That(rejectedSaveResult.Code, Is.Not.EqualTo(P12AResultCode.Saved));
+            Assert.That(fileOperations.CorruptNextRead, Is.False,
+                "The official atomic writer reread and rejected the corrupted temporary artifact.");
+            Assert.That(sourceApplication.ActiveSession, Is.SameAs(liveBeforeRejectedSave));
+            Assert.That(sourceSession.SimulationTime.AbsoluteDay, Is.EqualTo(savedDay + 2L));
+            CollectionAssert.AreEqual(resumedBytes, File.ReadAllBytes(slotPath),
+                "A failed atomic replacement leaves the prior valid continuation slot byte-identical.");
+
+            Assert.That(P12AContinuationStore.TryLoadDotNetV2(
+                    null, descriptor, persistentRoot, fileOperations,
+                    out P12AContinuationImage preservedImage,
+                    out P12AResult preservedResult), Is.True, preservedResult?.Code.ToString());
+            Assert.That(preservedImage.Header.Day, Is.EqualTo(savedDay + 1L));
+        }
+        finally
+        {
+            string fullRoot = Path.GetFullPath(persistentRoot);
+            string fullBase = Path.GetFullPath(AppContext.BaseDirectory);
+            Assert.That(fullRoot.StartsWith(fullBase, StringComparison.OrdinalIgnoreCase), Is.True,
+                "The test may remove only its unique directory below the test output root.");
+            if (Directory.Exists(fullRoot)) Directory.Delete(fullRoot, recursive: true);
+        }
     }
 
     [Test]

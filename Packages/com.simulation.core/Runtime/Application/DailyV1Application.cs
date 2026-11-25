@@ -2132,7 +2132,112 @@ internal sealed class DailyV1Application
             return false;
         }
 
+        if (!TryBindRestoredCoreP8Owners(
+                candidate, stagedRoots.SpatialAuthority, out diagnostic))
+        {
+            candidate = null;
+            calendar = null;
+            return false;
+        }
+
         return true;
+    }
+
+    private static bool TryInstallRestoredCoreP18ReceiptOwners(
+        DailyV1ActiveRuntimeSession candidate,
+        P12ADailyV1ImageOwnerSnapshots snapshots,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = candidate?.OwnerGraph;
+        if (candidate == null || graph == null || snapshots?.CrimeReceipts == null
+            || snapshots.JusticeReceipts == null
+            || graph.CrimeP18ReceiptOwner == null || graph.JusticeP18ReceiptOwner == null
+            || graph.JusticeRecordsOwner == null)
+        {
+            diagnostic = "The private restored Core graph is missing its exact P18 receipt owners or decoded snapshots.";
+            return false;
+        }
+
+        if (!graph.CrimeP18ReceiptOwner.TryInstallP12AReceiptOwnerSnapshot(
+                snapshots.CrimeReceipts)
+            || !graph.JusticeP18ReceiptOwner.TryInstallP12AReceiptOwnerSnapshot(
+                snapshots.JusticeReceipts))
+        {
+            diagnostic = "Core could not install the decoded P18 receipt state into the fresh private owner graph.";
+            return false;
+        }
+
+        if (!graph.CrimeP18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                out P12ACrimeReceiptOwnerSnapshot crime)
+            || !ReferenceEquals(crime, snapshots.CrimeReceipts)
+            || !graph.JusticeP18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                out P12AJusticeReceiptOwnerSnapshot justice)
+            || !ReferenceEquals(justice, snapshots.JusticeReceipts))
+        {
+            diagnostic = "The private restored Core graph did not retain the exact decoded P18 receipt snapshots.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryBindRestoredCoreP8Owners(
+        DailyV1ActiveRuntimeSession candidate,
+        SpatialAuthorityStore spatialAuthority,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = candidate?.OwnerGraph;
+        PersonStore persons = graph?.PersonStore;
+        SpatialPassageAuthority passage = spatialAuthority?.PassageAuthority;
+        if (candidate == null || graph == null || persons == null
+            || spatialAuthority == null || passage == null)
+        {
+            diagnostic = "The restored Core P8 owner set requires the exact P12-C spatial authority and P12-D PersonStore.";
+            return false;
+        }
+
+        var positions = new PersonSpatialPositionStore(
+            persons,
+            spatialAuthority,
+            new SpatialPassageTraversalOptionResolver(passage));
+        if (!graph.TryBindPersonSpatialPositionStore(positions))
+        {
+            diagnostic = "Core could not bind the restored exact-empty P8-C position owner to its P12-C spatial and P12-D person authorities.";
+            return false;
+        }
+
+        var anchors = new LegacySpatialAnchorBindingStore(
+            spatialAuthority,
+            owner => IsRestoredSpatialAnchorOwner(graph, owner));
+        if (!graph.TryBindLegacySpatialAnchorBindingStore(anchors)
+            || !graph.TryCreateP8DTravelOwners(candidate.SimulationTime)
+            || !graph.TryValidateP8DTravelOwnerBindings())
+        {
+            diagnostic = "Core could not bind the restored exact-empty P8-C anchor and P8-D route owners to the exact selected runtime graph.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool IsRestoredSpatialAnchorOwner(
+        DailyV1SelectedRuntimeOwnerGraph graph,
+        SpatialAnchorOwnerId owner)
+    {
+        if (graph == null || owner == null || string.IsNullOrWhiteSpace(owner.Value))
+            return false;
+        if (owner.Kind == SpatialAnchorOwnerKind.City)
+        {
+            foreach (DailyV1CityRuntimeOwners city in graph.Cities)
+                if (city != null && string.Equals(city.RuntimeId, owner.Value, StringComparison.Ordinal))
+                    return true;
+            return false;
+        }
+        return owner.Kind == SpatialAnchorOwnerKind.ExplorableSite
+            && graph.ExplorableSites != null
+            && graph.ExplorableSites.TryGetByRuntimeId(owner.Value, out _);
     }
 
     internal object ActiveSessionSyncRoot => activeSessionGate.SyncRoot;
@@ -2433,9 +2538,9 @@ internal sealed class DailyV1Application
     /// <summary>
     /// Seals a completed P12 image using exact operation-bound Core sections.
     /// Unity may provide compatibility sections for owners that have not yet
-    /// migrated. Core-owned City, demographic, spatial, and available NPC
+    /// migrated. Core-owned City, demographic, spatial, NPC, and P18 receipt
     /// sections are checked and replaced by Core; a mixed roster keeps its
-    /// complete Unity NPC row projection for the members not present in Core.
+    /// complete Unity NPC row projection for members not present in Core.
     /// </summary>
     internal bool TryComposeCoreOwnedContinuationImage(
         DailyV1P12GContinuationSaveOperation operation,
@@ -2463,7 +2568,12 @@ internal sealed class DailyV1Application
                 out IReadOnlyList<P12AOwnerSection> p12DOwnerSections,
                 out bool includesNpcOwnerSections,
                 out result))
+        {
+            if (string.IsNullOrWhiteSpace(result?.SectionCode))
+                result = new P12AResult(result?.Code ?? P12AResultCode.InvalidOwnerValue,
+                    "p12g.core-p12d-owner-encode", result?.StableOwnerKey);
             return false;
+        }
         if (includesNpcOwnerSections != (operation.CoreNpcOwnerSources != null))
         {
             result = new P12AResult(P12AResultCode.OwnerGraphRejected,
@@ -2481,22 +2591,63 @@ internal sealed class DailyV1Application
         if (!operation.TryEncodeCoreP12EOwnerSections(
                 token.AbsoluteDay,
                 out IReadOnlyList<P12AOwnerSection> p12EOwnerSections,
-                out result)
-            || !operation.TryEncodeCoreP12FOwnerSections(
+                out result))
+        {
+            if (string.IsNullOrWhiteSpace(result?.SectionCode))
+                result = new P12AResult(result?.Code ?? P12AResultCode.InvalidOwnerValue,
+                    "p12g.core-p12e-owner-encode", result?.StableOwnerKey);
+            return false;
+        }
+        if (!operation.TryEncodeCoreP12FOwnerSections(
                 out IReadOnlyList<P12AOwnerSection> p12FOwnerSections,
                 out result))
+        {
+            if (string.IsNullOrWhiteSpace(result?.SectionCode))
+                result = new P12AResult(result?.Code ?? P12AResultCode.InvalidOwnerValue,
+                    "p12g.core-p12f-owner-encode", result?.StableOwnerKey);
             return false;
+        }
+
+        IReadOnlyList<P12AOwnerSection> p12BP18ReceiptSections;
+        if (!operation.TryEncodeCoreP12BP18ReceiptSections(
+                out p12BP18ReceiptSections, out result))
+        {
+            // A Unity compatibility host may still own the two census rows by
+            // its CrimeSystem/JusticeSystem adapters. Keep those exact owner
+            // identities on the adapter path; never substitute the Core
+            // receipt owners just because the Core graph has parallel owners.
+            P12AResult adapterReceiptResult = null;
+            if (!string.Equals(result?.SectionCode,
+                    "p12b.core-p18-receipt-census-binding", StringComparison.Ordinal)
+                || !TryValidateAdapterP12BP18ReceiptSections(
+                    operation, adapterEncodedOwnerSections, out adapterReceiptResult))
+            {
+                if (adapterReceiptResult != null)
+                    result = adapterReceiptResult;
+                else if (string.IsNullOrWhiteSpace(result?.SectionCode))
+                    result = new P12AResult(result?.Code ?? P12AResultCode.InvalidOwnerValue,
+                        "p12g.core-p12b-p18-receipt-encode", result?.StableOwnerKey);
+                return false;
+            }
+            p12BP18ReceiptSections = Array.Empty<P12AOwnerSection>();
+        }
 
         if (!TryMergeCoreOwnedContinuationSections(
                 p12DOwnerSections,
                 p12EOwnerSections,
                 p12FOwnerSections,
+                p12BP18ReceiptSections,
                 adapterEncodedOwnerSections,
                 out IReadOnlyList<P12AOwnerSection> encodedOwnerSections,
                 out result))
+        {
+            if (string.IsNullOrWhiteSpace(result?.SectionCode))
+                result = new P12AResult(result?.Code ?? P12AResultCode.InvalidOwnerValue,
+                    "p12g.owner-section-merge", result?.StableOwnerKey);
             return false;
+        }
 
-        return TryComposeContinuationImage(
+        if (!TryComposeContinuationImage(
             operation,
             unityCompatibility,
             dotNetCompatibility,
@@ -2504,7 +2655,94 @@ internal sealed class DailyV1Application
             encodedOwnerSections,
             out image,
             out manifest,
-            out result);
+            out result))
+        {
+            if (string.IsNullOrWhiteSpace(result?.SectionCode))
+                result = new P12AResult(result?.Code ?? P12AResultCode.InvalidOwnerValue,
+                    "p12g.final-image-compose", result?.StableOwnerKey);
+            return false;
+        }
+        return true;
+    }
+
+    private static bool TryValidateAdapterP12BP18ReceiptSections(
+        DailyV1P12GContinuationSaveOperation operation,
+        IReadOnlyList<P12AOwnerSection> adapterEncodedOwnerSections,
+        out P12AResult result)
+    {
+        result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+            "p12b.adapter-p18-receipt-census-binding");
+        if (operation == null || !operation.IsActive || adapterEncodedOwnerSections == null
+            || !operation.TryRevalidate(out _))
+            return false;
+
+        IReadOnlyList<OwnerSectionCensusSnapshot> census =
+            operation.SourceWitness?.TokenOwnerSections;
+        if (!TryFindReceiptCensusSnapshot(census,
+                DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+                out OwnerSectionCensusSnapshot crimeCensus)
+            || !TryFindReceiptCensusSnapshot(census,
+                DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                out OwnerSectionCensusSnapshot justiceCensus)
+            || crimeCensus.Cardinality != 1 || justiceCensus.Cardinality != 1
+            || crimeCensus.OwnerInstanceIdentity == null || justiceCensus.OwnerInstanceIdentity == null)
+            return false;
+
+        List<P12AOwnerSection> receiptSections = new List<P12AOwnerSection>(2);
+        foreach (P12AOwnerSection section in adapterEncodedOwnerSections)
+        {
+            if (section == null) return false;
+            if (string.Equals(section.Id,
+                    DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+                    StringComparison.Ordinal)
+                || string.Equals(section.Id,
+                    DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                    StringComparison.Ordinal))
+                receiptSections.Add(section);
+        }
+
+        if (receiptSections.Count != 2)
+        {
+            result = new P12AResult(P12AResultCode.MissingOrDuplicateSection,
+                "p12b.adapter-p18-receipt-sections");
+            return false;
+        }
+        if (!P12AReceiptOwnerCodec.TryDecode(receiptSections,
+                out P12ACrimeReceiptOwnerSnapshot crimeSnapshot,
+                out P12AJusticeReceiptOwnerSnapshot justiceSnapshot,
+                out result)) return false;
+        if (crimeSnapshot == null || justiceSnapshot == null
+            || crimeSnapshot.CensusRevision != crimeCensus.Revision
+            || justiceSnapshot.CensusRevision != justiceCensus.Revision)
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12b.adapter-p18-receipt-census-revision");
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+
+    private static bool TryFindReceiptCensusSnapshot(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        string sectionId,
+        out OwnerSectionCensusSnapshot snapshot)
+    {
+        snapshot = null;
+        if (census == null || string.IsNullOrWhiteSpace(sectionId)) return false;
+        foreach (OwnerSectionCensusSnapshot candidate in census)
+        {
+            if (candidate == null) return false;
+            if (!string.Equals(candidate.SectionId, sectionId, StringComparison.Ordinal)) continue;
+            if (snapshot != null) return false;
+            snapshot = candidate;
+        }
+        return snapshot != null
+            && snapshot.SchemaVersion == DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+            && snapshot.Role == OwnerSectionRole.Required
+            && snapshot.Cardinality >= 0
+            && snapshot.Revision >= 0L;
     }
 
     /// <summary>
@@ -2516,6 +2754,7 @@ internal sealed class DailyV1Application
         IReadOnlyList<P12AOwnerSection> coreP12DOwnerSections,
         IReadOnlyList<P12AOwnerSection> coreP12EOwnerSections,
         IReadOnlyList<P12AOwnerSection> coreP12FOwnerSections,
+        IReadOnlyList<P12AOwnerSection> coreP12BP18ReceiptSections,
         IReadOnlyList<P12AOwnerSection> adapterEncodedOwnerSections,
         out IReadOnlyList<P12AOwnerSection> encodedOwnerSections,
         out P12AResult result)
@@ -2523,14 +2762,16 @@ internal sealed class DailyV1Application
         encodedOwnerSections = null;
         result = new P12AResult(P12AResultCode.InvalidOwnerValue);
         if (coreP12DOwnerSections == null || coreP12EOwnerSections == null
-            || coreP12FOwnerSections == null || adapterEncodedOwnerSections == null)
+            || coreP12FOwnerSections == null || coreP12BP18ReceiptSections == null
+            || adapterEncodedOwnerSections == null)
             return false;
 
         Dictionary<string, P12AOwnerSection> coreSections =
             new Dictionary<string, P12AOwnerSection>(StringComparer.Ordinal);
         if (!TryAddCoreSections(coreSections, coreP12DOwnerSections)
             || !TryAddCoreSections(coreSections, coreP12EOwnerSections)
-            || !TryAddCoreSections(coreSections, coreP12FOwnerSections))
+            || !TryAddCoreSections(coreSections, coreP12FOwnerSections)
+            || !TryAddCoreSections(coreSections, coreP12BP18ReceiptSections))
         {
             result = new P12AResult(P12AResultCode.OwnerGraphRejected,
                 "p12a.core-owner-section-identity");
@@ -2882,6 +3123,337 @@ internal sealed class DailyV1Application
 
         result = new P12AResult(P12AResultCode.InvalidOwnerValue);
         return false;
+    }
+
+    /// <summary>
+    /// Saves the active host-neutral Daily-v1 session through the fixed .NET
+    /// v2 P12 route. One continuation-save lease remains held across exact
+    /// source capture, Core owner encoding, detached full-owner restoration,
+    /// and the atomic slot write. Unity v1 remains on its existing adapter
+    /// route until its legacy political-world aggregate has a shared writer.
+    /// </summary>
+    internal bool TrySaveDotNetContinuation(out P12AResult result)
+    {
+        return TrySaveDotNetContinuation(out result, out _);
+    }
+
+    internal bool TrySaveDotNetContinuation(out P12AResult result, out string diagnostic)
+    {
+        result = new P12AResult(P12AResultCode.Busy);
+        diagnostic = null;
+        DailyV1ApplicationHost host = BoundHost;
+        DailyV1ActiveRuntimeSession session = activeSessionGate.Current;
+        if (host == null || host.DotNetIdentity == null || host.UnityV1Identity != null)
+        {
+            result = new P12AResult(P12AResultCode.UnsupportedProfile,
+                "p12a.dotnet-host-required");
+            diagnostic = "Durable Core continuation currently requires the bound .NET v2 host identity.";
+            return false;
+        }
+        if (session == null)
+        {
+            diagnostic = "The Core application has no active session to save.";
+            return false;
+        }
+        if (!session.AdmissionContext.IsOwnedByCurrentThread())
+        {
+            result = new P12AResult(P12AResultCode.WrongThread);
+            diagnostic = "The continuation save must run on the active session's owner thread.";
+            return false;
+        }
+
+        if (!TryBeginContinuationSaveOperation(
+                session,
+                out DailyV1P12GContinuationSaveOperation operation,
+                out DailyCaptureEligibilityFailure captureFailure))
+        {
+            result = new P12AResult(captureFailure == DailyCaptureEligibilityFailure.WrongOwnerThread
+                ? P12AResultCode.WrongThread
+                : captureFailure == DailyCaptureEligibilityFailure.OperationInProgress
+                    ? P12AResultCode.Busy
+                    : P12AResultCode.CaptureRejected,
+                "p12g.save-source-boundary");
+            diagnostic = "The selected Core session has no eligible exact completed save boundary: "
+                + captureFailure + ".";
+            return false;
+        }
+
+        using (operation)
+        {
+            if (!DailyV1CompatibilityDescriptorFactory.TryCreateDotNetV2(
+                    session.Definitions, host.DotNetIdentity,
+                    out P12ACompatibilityDescriptorV2 compatibility,
+                    out diagnostic)
+                || compatibility == null)
+            {
+                result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration,
+                    "p12a.dotnet-host-identity");
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The selected definitions do not admit this exact .NET host identity.";
+                return false;
+            }
+
+            if (!operation.TryComposeCoreOwnedImage(
+                    unityCompatibility: null,
+                    dotNetCompatibility: compatibility,
+                    politicalWorldRevision: session.PoliticalWorldRevision,
+                    adapterEncodedOwnerSections: Array.Empty<P12AOwnerSection>(),
+                    out P12AContinuationImage image,
+                    out _,
+                    out result)
+                || image == null)
+            {
+                if (string.IsNullOrWhiteSpace(result?.SectionCode))
+                    result = new P12AResult(result?.Code ?? P12AResultCode.InvalidOwnerValue,
+                        "p12g.core-image-compose", result?.StableOwnerKey);
+                diagnostic = "Core could not encode the captured complete selected-profile owner image: "
+                    + result?.SectionCode + ".";
+                return false;
+            }
+
+            if (!TryValidateCapturedContinuationImageByDetachedStart(
+                    image, session.Definitions, host, session,
+                    out result, out diagnostic))
+            {
+                if (string.IsNullOrWhiteSpace(result?.SectionCode))
+                    result = new P12AResult(result?.Code ?? P12AResultCode.AdmissionRejected,
+                        "p12g.detached-image-validation", result?.StableOwnerKey);
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The captured image failed detached Core restore validation before any slot write.";
+                return false;
+            }
+
+            // The validator has published the image only into a fresh private
+            // Core application and proved its restored capture boundary. The
+            // source lease is still active, so no owner mutation can race the
+            // final codec readback and atomic replacement.
+            if (!operation.TryPersistImage(
+                    image, host.PersistentDataRoot, host.FileOperations, out result))
+            {
+                if (string.IsNullOrWhiteSpace(result?.SectionCode))
+                    result = new P12AResult(result?.Code ?? P12AResultCode.StorageFailure,
+                        "p12g.durable-store", result?.StableOwnerKey);
+                diagnostic = "The existing P12 atomic store rejected the encoded continuation: "
+                    + result?.SectionCode + ".";
+                return false;
+            }
+            diagnostic = null;
+            return true;
+        }
+    }
+
+    private static bool TryValidateCapturedContinuationImageByDetachedStart(
+        P12AContinuationImage image,
+        DailyV1EffectiveDefinitions definitions,
+        DailyV1ApplicationHost host,
+        DailyV1ActiveRuntimeSession sourceSession,
+        out P12AResult result,
+        out string diagnostic)
+    {
+        result = new P12AResult(P12AResultCode.AdmissionRejected);
+        diagnostic = null;
+        if (image == null || definitions == null || host?.DotNetIdentity == null
+            || sourceSession == null)
+        {
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            diagnostic = "Detached continuation validation requires the captured image, definitions, host, and source session.";
+            return false;
+        }
+
+        var validator = new DailyV1Application();
+        if (!validator.TryCaptureBootstrapAdmissionContext(
+                out SimulationRuntimeAdmissionContext bootstrapContext)
+            || !validator.TryBindApplicationHost(host, out diagnostic))
+        {
+            result = new P12AResult(P12AResultCode.Busy);
+            if (string.IsNullOrWhiteSpace(diagnostic))
+                diagnostic = "A fresh Core bootstrap context could not be established for detached image validation.";
+            return false;
+        }
+
+        var loadedResult = new P12AResult(P12AResultCode.Loaded);
+        DailyV1ApplicationStartAdmission admission;
+        lock (validator.activeSessionGate.SyncRoot)
+        {
+            if (validator.initialContinuationLoadAttempted
+                || validator.initialGenesisPreparationAttempted
+                || validator.activeSessionGate.Current != null
+                || validator.activeSessionGate.ActiveOperationCount != 0
+                || !bootstrapContext.IsOwnedByCurrentThread())
+            {
+                result = new P12AResult(P12AResultCode.Busy);
+                diagnostic = "The detached image validator is no longer an unused owner-thread Core application.";
+                return false;
+            }
+
+            // This token is private to save validation. It binds the exact
+            // captured image to Core's ordinary restore transaction, without
+            // reading or modifying the live save slot.
+            validator.initialContinuationLoadAttempted = true;
+            validator.initialContinuationLoadBlocksGenesis = true;
+            validator.initialContinuationLoadResult = loadedResult;
+            validator.initialContinuationImage = image;
+            admission = new DailyV1ApplicationStartAdmission(
+                validator, DailyV1ApplicationStartAdmissionKind.RestoreRequired,
+                image, loadedResult);
+        }
+
+        DailyV1RestoredImageCoreOwnerStages restoreStages = null;
+        bool committed = false;
+        try
+        {
+            SimulationLogger logger = CreateInitialLogger(definitions, host);
+            var preparation = new DailyV1ApplicationStartPreparation(
+                validator, DailyV1ApplicationStartPreparationKind.RestoreRequired,
+                image, null, null, logger, admission, loadedResult);
+            if (!DailyV1CompatibilityDescriptorFactory.TryCreateDotNetV2(
+                    definitions, host.DotNetIdentity,
+                    out P12ACompatibilityDescriptorV2 compatibility,
+                    out diagnostic)
+                || compatibility == null)
+            {
+                result = new P12AResult(P12AResultCode.IncompatibleContentOrConfiguration,
+                    "p12a.detached-host-identity");
+                return false;
+            }
+
+            bool staged = validator.TryRunRestoredImageCoreOwnerTransaction(
+                image,
+                unityV1Identity: null,
+                dotNetV2Identity: compatibility,
+                selectedDefinitions: definitions,
+                bootstrapAdmissionContext: bootstrapContext,
+                expectedSession: null,
+                replacementOperation: null,
+                initialStartAdmission: admission,
+                createDiagnosticLogger: () => preparation.Logger,
+                lastEconomySnapshotDay: image.Header.LastEconomySnapshotDay,
+                imageDecoded: null,
+                stageCompleted: null,
+                projectCoreRoots: null,
+                prepareHostProjection: null,
+                projectCompletedCoreOwnerStage: null,
+                p12EOwnerStageObserver: null,
+                p12FOwnerStageObserver: null,
+                out bool admissionPassed,
+                out bool rootsPrepared,
+                out P12ADailyV1Census imageCensus,
+                out _,
+                out restoreStages,
+                out DailyV1RestoredImageCoreOwnerStageBoundary failedBoundary,
+                out result,
+                out diagnostic);
+            if (!staged || !admissionPassed || !rootsPrepared
+                || restoreStages == null || !restoreStages.IsComplete
+                || restoreStages.CoreSession == null || imageCensus == null)
+            {
+                if (result == null || result.Code == P12AResultCode.Busy)
+                    result = new P12AResult(P12AResultCode.AdmissionRejected,
+                        "p12g.detached-stage." + failedBoundary);
+                if (string.IsNullOrWhiteSpace(diagnostic))
+                    diagnostic = "The captured image failed the complete detached Core owner-stage transaction at "
+                        + failedBoundary + ".";
+                return false;
+            }
+
+            DailyV1ActiveRuntimeSession candidate = restoreStages.CoreSession;
+            if (ReferenceEquals(candidate, sourceSession)
+                || ReferenceEquals(candidate.ExecutionBoundaryState,
+                    sourceSession.ExecutionBoundaryState)
+                || ReferenceEquals(candidate.OwnerGraph, sourceSession.OwnerGraph))
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12g.detached-candidate-identity");
+                diagnostic = "The detached target reused an authoritative source session or owner graph.";
+                return false;
+            }
+            if (!DailyV1CoreSelectedOwnerCensusProviderComposition
+                    .TryInstallCompleteProfileForApplicationStart(candidate, out diagnostic))
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12g.detached-census-install");
+                return false;
+            }
+            if (!DailyV1CoreSelectedRuntimeAdvanceHostPorts.TryCreateForApplicationStart(
+                    preparation, candidate,
+                    out IDailyV1SelectedRuntimeAdvanceHostPorts candidateHostPorts,
+                    out diagnostic)
+                || candidateHostPorts == null)
+            {
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12g.detached-runtime-ports");
+                return false;
+            }
+
+            if (!validator.TryCaptureAndValidateRestoredImageOwnerVector(
+                    candidate, candidateHostPorts, imageCensus,
+                    expectedSession: null, replacementOperation: null, stageObserver: null,
+                    out IReadOnlyList<OwnerSectionCensusSnapshot> targetOwnerSections,
+                    out long targetMutationEpoch,
+                    out P12GDailyV1OwnerVectorFailure ownerVectorFailure,
+                    out diagnostic))
+            {
+                result = new P12AResult(P12AResultCode.AdmissionRejected,
+                    "p12g.detached-target-vector." + ownerVectorFailure);
+                return false;
+            }
+            if (!TryValidateRestoredCoreTargetInvariants(
+                    candidate, targetOwnerSections, out diagnostic))
+            {
+                result = new P12AResult(P12AResultCode.AdmissionRejected,
+                    "p12g.detached-target-invariants");
+                return false;
+            }
+            if (!validator.TryBindInitialRestoredImageCommitProof(
+                    admission, restoreStages, candidate,
+                    targetOwnerSections, targetMutationEpoch, stageObserver: null,
+                    out diagnostic))
+            {
+                result = new P12AResult(P12AResultCode.AdmissionRejected,
+                    "p12g.detached-commit-proof");
+                return false;
+            }
+            if (!validator.TryCommitInitialRestoredCoreCandidate(
+                    admission, image, candidate, candidateHostPorts, out diagnostic)
+                || !ReferenceEquals(validator.ActiveSession, candidate))
+            {
+                result = new P12AResult(P12AResultCode.AdmissionRejected,
+                    "p12g.detached-publication");
+                return false;
+            }
+            if (!candidate.RuntimeAdvanceBoundary.TryCaptureDailyBoundaryAdmissionEvidence(
+                    sessionReplacement: false,
+                    out _, out _, out DailyCaptureEligibilityFailure captureFailure)
+                || !candidate.ExecutionBoundaryState.TryAssessCaptureScope(
+                    DailyV1CaptureScopeAllowance.None))
+            {
+                result = new P12AResult(P12AResultCode.AdmissionRejected,
+                    "p12g.detached-completed-boundary." + captureFailure);
+                diagnostic = "The detached image was not left at an eligible completed Core boundary.";
+                return false;
+            }
+
+            committed = true;
+            result = new P12AResult(P12AResultCode.Loaded);
+            diagnostic = null;
+            return true;
+        }
+        catch (Exception exception) when (exception is ArgumentException
+            || exception is InvalidOperationException || exception is OverflowException
+            || exception is NullReferenceException)
+        {
+            result = new P12AResult(P12AResultCode.AdmissionRejected,
+                "p12g.detached-stage-exception");
+            diagnostic = "The detached Core candidate was rejected before slot replacement: "
+                + exception.GetType().Name + ".";
+            return false;
+        }
+        finally
+        {
+            if (!committed)
+                restoreStages?.Fail();
+            validator.ClearPreparedInitialRestoredSession(image);
+        }
     }
 
     internal void EndContinuationSaveOperation()
@@ -5016,8 +5588,35 @@ internal sealed class DailyV1Application
             return false;
         }
 
-        if (candidateSession == null
-            || !stages.TryAcceptCoreSession(
+        if (candidateSession == null)
+        {
+            stages.Fail();
+            candidate = null;
+            calendar = null;
+            diagnostic = "Core did not create the private restored session.";
+            return false;
+        }
+
+        if (!TryInstallRestoredCoreP18ReceiptOwners(
+                candidateSession, stages.Snapshots, out diagnostic))
+        {
+            stages.Fail();
+            candidate = null;
+            calendar = null;
+            return false;
+        }
+
+        if (!candidateSession.TryBindRestoredPoliticalWorldRevision(
+                stages.Image.Header.PoliticalWorldRevision))
+        {
+            stages.Fail();
+            candidate = null;
+            calendar = null;
+            diagnostic = "The restored Core session could not retain the exact P12 header political-world revision.";
+            return false;
+        }
+
+        if (!stages.TryAcceptCoreSession(
                 candidateSession, candidateCalendar, restoredAdmissionContext, out diagnostic))
         {
             stages.Fail();

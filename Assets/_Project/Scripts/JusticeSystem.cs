@@ -51,7 +51,15 @@ public class JusticeSystem : IAuthoritativeMutationGuardBindable
     {
         if (owner == null) return false;
         if (ReferenceEquals(p18ReceiptOwner, owner)) return true;
-        if (owner.WasRestored || !owner.IsExactEmpty) return false;
+        if (owner.WasRestored)
+        {
+            // Bind the host adapter to the exact receipt owner staged by a
+            // detached P12 restore. Preserve one authoritative owner instance.
+            if (p18ReceiptOwner.WasRestored || !p18ReceiptOwner.IsExactEmpty) return false;
+            p18ReceiptOwner = owner;
+            return true;
+        }
+        if (!owner.IsExactEmpty) return false;
         if (p18ReceiptOwner.WasRestored)
         {
             if (!p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(

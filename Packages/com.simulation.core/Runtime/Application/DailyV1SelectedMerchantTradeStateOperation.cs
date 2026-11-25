@@ -467,13 +467,15 @@ internal static class DailyV1SelectedMerchantTradeStateOperation
 
     /// <summary>
     /// Advances pending-travel days for selected active plans before the daily
-    /// actor pass. The compatibility adapter remains responsible for the
-    /// existing P12 plan-owner admission and publication callback.
+    /// actor pass. Core keeps each plan revision inside the existing per-actor
+    /// MerchantDailyTrade operation; the compatibility adapter retains its
+    /// established P12 plan-owner admission and publication callback.
     /// </summary>
     internal static bool TryAdvancePendingTravelDays(
         DailyV1SelectedRuntimeOwnerGraph graph,
         IReadOnlyList<DailyV1NpcRuntimeOwners> exactNpcOwners,
-        IDailyV1SelectedMerchantTradeStateBoundary boundary)
+        IDailyV1SelectedMerchantTradeStateBoundary boundary,
+        IDailyV1SelectedMerchantTradeStateAdmissionBoundary admissionBoundary = null)
     {
         if (graph == null || exactNpcOwners == null || boundary == null
             || !graph.MatchesExactOwnerInstances(graph.Cities, exactNpcOwners))
@@ -495,13 +497,21 @@ internal static class DailyV1SelectedMerchantTradeStateOperation
                 || ReferenceEquals(targetCity, currentCity))
                 continue;
 
-            // The Unity adapter intentionally treats a rejected projection/P12
-            // mutation as a no-op for this legacy void maintenance operation.
-            boundary.TryInstallPlanState(actor, plan.ItemDefinition,
-                plan.OriginCityRuntimeId, plan.TargetCityRuntimeId,
-                plan.PlannedAmount, plan.RemainingAmount,
-                plan.PurchasePricePerItem, plan.WaitDaysAtDestination,
-                plan.PendingTravelDays + 1, plan.OriginDecisionId);
+            Func<bool> installPendingPlanRevision = () =>
+                boundary.TryInstallPlanState(actor, plan.ItemDefinition,
+                    plan.OriginCityRuntimeId, plan.TargetCityRuntimeId,
+                    plan.PlannedAmount, plan.RemainingAmount,
+                    plan.PurchasePricePerItem, plan.WaitDaysAtDestination,
+                    plan.PendingTravelDays + 1, plan.OriginDecisionId);
+            if (admissionBoundary == null)
+            {
+                // Legacy Unity compatibility retains its historical no-op-on-rejection behavior.
+                installPendingPlanRevision();
+                continue;
+            }
+            if (!admissionBoundary.ExecuteWithinSelectedMerchantDailyOperation(
+                    actor, installPendingPlanRevision))
+                return false;
         }
 
         return true;

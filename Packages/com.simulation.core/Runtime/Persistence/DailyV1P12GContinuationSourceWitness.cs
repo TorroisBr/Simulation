@@ -477,6 +477,113 @@ internal sealed class DailyV1P12GContinuationSaveOperation : IDisposable
         return true;
     }
 
+    internal bool TryEncodeCoreP12BP18ReceiptSections(
+        out IReadOnlyList<P12AOwnerSection> sections,
+        out P12AResult result)
+    {
+        sections = null;
+        result = new P12AResult(P12AResultCode.CaptureRejected);
+        if (!IsActive || !TryRevalidate(out _)) return false;
+
+        DailyV1SelectedRuntimeOwnerGraph graph = Session.OwnerGraph;
+        DailyV1CrimeP18ReceiptOwner crimeOwner = graph?.CrimeP18ReceiptOwner;
+        DailyV1JusticeP18ReceiptOwner justiceOwner = graph?.JusticeP18ReceiptOwner;
+        DailyV1JusticeRecordsOwner justiceRecords = graph?.JusticeRecordsOwner;
+        IReadOnlyList<OwnerSectionCensusSnapshot> census = SourceWitness.TokenOwnerSections;
+        if (graph == null || crimeOwner == null || justiceOwner == null || justiceRecords == null
+            || !TryFindReceiptCensusSnapshot(census,
+                DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId,
+                out OwnerSectionCensusSnapshot crimeCensus)
+            || !TryFindReceiptCensusSnapshot(census,
+                DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId,
+                out OwnerSectionCensusSnapshot justiceCensus)
+            || !ReferenceEquals(crimeCensus.OwnerInstanceIdentity, crimeOwner)
+            || !ReferenceEquals(justiceCensus.OwnerInstanceIdentity, justiceRecords)
+            || !ReferenceEquals(graph.JusticeRecordsOwner, justiceRecords)
+            || crimeCensus.Role != OwnerSectionRole.Required
+            || justiceCensus.Role != OwnerSectionRole.Required
+            || crimeCensus.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion
+            || justiceCensus.SchemaVersion != DailyV1SelectedOwnerSectionCensusContract.NpcSectionSchemaVersion)
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12b.core-p18-receipt-census-binding");
+            return false;
+        }
+
+        if (!crimeOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                out P12ACrimeReceiptOwnerSnapshot crimeSnapshot)
+            || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(
+                out P12AJusticeReceiptOwnerSnapshot justiceSnapshot)
+            || crimeSnapshot == null || justiceSnapshot == null
+            || crimeOwner.CensusCardinality != crimeCensus.Cardinality
+            || crimeOwner.CensusRevision != crimeCensus.Revision
+            || crimeSnapshot.CensusRevision != crimeCensus.Revision
+            || justiceOwner.CensusCardinality != justiceCensus.Cardinality
+            || justiceOwner.CensusRevision != justiceCensus.Revision
+            || justiceSnapshot.CensusRevision != justiceCensus.Revision)
+        {
+            result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                "p12b.core-p18-receipt-census-revision");
+            return false;
+        }
+
+        if (!P12AReceiptOwnerCodec.TryEncode(
+                crimeSnapshot, justiceSnapshot,
+                out sections, out result)
+            || sections == null || sections.Count != 2)
+            return false;
+
+        foreach (P12AOwnerSection section in sections)
+        {
+            if (section == null || section.Role != OwnerSectionRole.Required
+                || section.Minor != 0 || section.Rows.Count != 1
+                || section.AliasGroup != P12ADailyV1Census.ExpectedAliasGroupForSection(section.Id)
+                || (section.Id == DailyV1SelectedOwnerSectionCensusContract.CrimeP18ReceiptsSectionId
+                    ? section.Revision != crimeSnapshot.CensusRevision
+                    : section.Id == DailyV1SelectedOwnerSectionCensusContract.JusticeP18ReceiptsSectionId
+                        ? section.Revision != justiceSnapshot.CensusRevision
+                        : true))
+            {
+                sections = null;
+                result = new P12AResult(P12AResultCode.OwnerGraphRejected,
+                    "p12b.core-p18-receipt-section-binding", section?.Id);
+                return false;
+            }
+        }
+
+        if (!crimeOwner.TryCaptureP12AReceiptOwnerSnapshot(out P12ACrimeReceiptOwnerSnapshot currentCrime)
+            || !justiceOwner.TryCaptureP12AReceiptOwnerSnapshot(out P12AJusticeReceiptOwnerSnapshot currentJustice)
+            || !ReferenceEquals(crimeSnapshot, currentCrime)
+            || !ReferenceEquals(justiceSnapshot, currentJustice)
+            || !TryRevalidate(out _))
+        {
+            sections = null;
+            result = new P12AResult(P12AResultCode.CaptureRejected,
+                "p12b.core-p18-receipt-stale");
+            return false;
+        }
+
+        result = null;
+        return true;
+    }
+
+    private static bool TryFindReceiptCensusSnapshot(
+        IReadOnlyList<OwnerSectionCensusSnapshot> census,
+        string sectionId,
+        out OwnerSectionCensusSnapshot snapshot)
+    {
+        snapshot = null;
+        if (census == null || string.IsNullOrWhiteSpace(sectionId)) return false;
+        foreach (OwnerSectionCensusSnapshot candidate in census)
+        {
+            if (candidate == null || !string.Equals(candidate.SectionId, sectionId, StringComparison.Ordinal))
+                continue;
+            if (snapshot != null) return false;
+            snapshot = candidate;
+        }
+        return snapshot != null;
+    }
+
     internal bool TryEncodeCoreP12DOwnerSections(
         out IReadOnlyList<P12AOwnerSection> sections,
         out bool includesNpcOwnerSections,

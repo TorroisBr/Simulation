@@ -105,7 +105,17 @@ public class CrimeSystem : INpcActionProvider, ISelectedDefinitionNpcActionProvi
     {
         if (owner == null) return false;
         if (ReferenceEquals(p18ReceiptOwner, owner)) return true;
-        if (owner.WasRestored || !owner.IsExactEmpty) return false;
+        if (owner.WasRestored)
+        {
+            // A detached P12 candidate already owns the restored authoritative
+            // receipt state. A fresh Unity adapter can bind that exact owner;
+            // copying or replacing it with the adapter's empty instance would
+            // split the P12 owner identity.
+            if (p18ReceiptOwner.WasRestored || !p18ReceiptOwner.IsExactEmpty) return false;
+            p18ReceiptOwner = owner;
+            return true;
+        }
+        if (!owner.IsExactEmpty) return false;
         if (p18ReceiptOwner.WasRestored)
         {
             if (!p18ReceiptOwner.TryCaptureP12AReceiptOwnerSnapshot(

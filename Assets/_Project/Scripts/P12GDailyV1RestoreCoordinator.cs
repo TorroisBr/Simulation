@@ -1491,6 +1491,65 @@ internal static partial class P12GDailyV1RestoreCoordinator
         values.Add(candidate);
     }
 
+    private static bool TryInstallOrVerifyCoreP18ReceiptSnapshots(
+        DailyV1ActiveRuntimeSession coreSession,
+        P12ACrimeReceiptOwnerSnapshot crimeSnapshot,
+        P12AJusticeReceiptOwnerSnapshot justiceSnapshot,
+        out string diagnostic)
+    {
+        diagnostic = null;
+        DailyV1SelectedRuntimeOwnerGraph graph = coreSession?.OwnerGraph;
+        if (graph?.CrimeP18ReceiptOwner == null || graph.JusticeP18ReceiptOwner == null
+            || crimeSnapshot == null || justiceSnapshot == null)
+        {
+            diagnostic = "The private Core session is missing its exact P18 receipt owners or decoded snapshots.";
+            return false;
+        }
+
+        if (!TryInstallOrVerifyCoreP18ReceiptSnapshot(
+                graph.CrimeP18ReceiptOwner,
+                crimeSnapshot)
+            || !TryInstallOrVerifyCoreP18ReceiptSnapshot(
+                graph.JusticeP18ReceiptOwner,
+                justiceSnapshot))
+        {
+            diagnostic = "The exact decoded P12-A receipt snapshots could not be installed into the private Core owners.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool TryInstallOrVerifyCoreP18ReceiptSnapshot(
+        DailyV1CrimeP18ReceiptOwner owner,
+        P12ACrimeReceiptOwnerSnapshot snapshot)
+    {
+        if (owner == null || snapshot == null || !snapshot.IsValid) return false;
+        if (owner.TryCaptureP12AReceiptOwnerSnapshot(
+                out P12ACrimeReceiptOwnerSnapshot current)
+            && ReferenceEquals(current, snapshot))
+            return true;
+        return owner.TryInstallP12AReceiptOwnerSnapshot(snapshot)
+            && owner.TryCaptureP12AReceiptOwnerSnapshot(
+                out current)
+            && ReferenceEquals(current, snapshot);
+    }
+
+    private static bool TryInstallOrVerifyCoreP18ReceiptSnapshot(
+        DailyV1JusticeP18ReceiptOwner owner,
+        P12AJusticeReceiptOwnerSnapshot snapshot)
+    {
+        if (owner == null || snapshot == null || !snapshot.IsValid) return false;
+        if (owner.TryCaptureP12AReceiptOwnerSnapshot(
+                out P12AJusticeReceiptOwnerSnapshot current)
+            && ReferenceEquals(current, snapshot))
+            return true;
+        return owner.TryInstallP12AReceiptOwnerSnapshot(snapshot)
+            && owner.TryCaptureP12AReceiptOwnerSnapshot(
+                out current)
+            && ReferenceEquals(current, snapshot);
+    }
+
     private static bool TryBuildRestoredSession(
         SimulationConfigData config,
         EffectiveSimulationConfiguration effective,
@@ -1624,11 +1683,6 @@ internal static partial class P12GDailyV1RestoreCoordinator
             effective.Crime,
             stagedC.DeterministicRandom,
             time);
-        if (!crime.TryInstallP12AReceiptOwnerSnapshot(stagedE.CrimeReceiptSnapshot))
-        {
-            diagnostic = "P12-A Crime receipt history could not be installed into the private restored owner.";
-            return false;
-        }
         if (effective.Crime.Enabled == true) actionProviders.Add(crime);
         if (effective.GuardCrime.Enabled == true)
             actionProviders.Add(new GuardSystem(stagedE.Justice, config.hiddenStatus, effective.GuardCrime));
@@ -1782,6 +1836,22 @@ internal static partial class P12GDailyV1RestoreCoordinator
                 return false;
             }
             restoredExecutionBoundary = coreRuntimeSession.ExecutionBoundaryState;
+        }
+
+        if (coreRuntimeSession != null)
+        {
+            if (!TryInstallOrVerifyCoreP18ReceiptSnapshots(
+                    coreRuntimeSession,
+                    stagedE.CrimeReceiptSnapshot,
+                    stagedE.JusticeReceiptSnapshot,
+                    out diagnostic))
+                return false;
+        }
+        else if (!crime.TryInstallP12AReceiptOwnerSnapshot(stagedE.CrimeReceiptSnapshot)
+            || !stagedE.Justice.TryInstallP12AReceiptOwnerSnapshot(stagedE.JusticeReceiptSnapshot))
+        {
+            diagnostic = "The detached Unity adapters could not install the exact P12-A receipt snapshots.";
+            return false;
         }
 
         SimulationRuntime runtime = new SimulationRuntime(

@@ -180,6 +180,7 @@ internal sealed class DailyV1ActiveRuntimeSession
 {
     private IDailyV1RuntimeAdvanceEvidenceBoundary runtimeAdvanceBoundary;
     private DailyV1InitialRestoredImageCommitProof initialRestoreCommitProof;
+    private bool restoredPoliticalWorldRevisionBound;
 
     private DailyV1ActiveRuntimeSession(
         DailyV1ExecutionBoundaryState executionBoundaryState,
@@ -201,6 +202,12 @@ internal sealed class DailyV1ActiveRuntimeSession
 
     internal DailyV1ExecutionBoundaryState ExecutionBoundaryState { get; }
     internal DailyV1SessionReportState ReportState { get; }
+    /// <summary>
+    /// P12 header-only compatibility/report value. It is not a census row and
+    /// is carried verbatim through detached restore; the Core proving host
+    /// starts at zero until a shared writer for this legacy aggregate exists.
+    /// </summary>
+    internal long PoliticalWorldRevision { get; private set; }
     internal DailyV1GenesisComposition GenesisComposition { get; }
     internal DailyV1P12CRuntimeRoots P12CRoots { get; }
     internal DailyV1DomainEventAuthority EventAuthority { get; }
@@ -234,6 +241,18 @@ internal sealed class DailyV1ActiveRuntimeSession
     {
         proof = initialRestoreCommitProof;
         return proof != null && image != null && ReferenceEquals(proof.Image, image);
+    }
+
+    internal bool TryBindRestoredPoliticalWorldRevision(long revision)
+    {
+        if (revision < 0 || restoredPoliticalWorldRevisionBound
+            || runtimeAdvanceBoundary != null
+            || AdmissionContext?.IsRestoredContinuation != true)
+            return false;
+
+        PoliticalWorldRevision = revision;
+        restoredPoliticalWorldRevisionBound = true;
+        return true;
     }
 
     internal bool ClearInitialRestoreCommitProof(

@@ -18,7 +18,7 @@ internal static class P12ADailyV1ImageComposer
     {
         image = null;
         manifest = null;
-        result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+        result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p12a.image-input");
         if (header == null || !header.IsValid || causalRoots == null
             || !causalRoots.IsValidFor(header) || exactOwnerSections == null
             || encodedRequiredOwnerSections == null)
@@ -51,14 +51,28 @@ internal static class P12ADailyV1ImageComposer
         try { candidate = new P12AContinuationImage(header, causalRoots, sections); }
         catch (ArgumentException)
         {
-            result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue, "p12a.image-constructor");
             return false;
         }
-        if (!census.MatchesImage(candidate) || !census.Manifest.Matches(candidate.Sections, out result))
+        if (!census.MatchesImage(candidate))
         {
             image = null;
             manifest = null;
-            if (result == null) result = new P12AResult(P12AResultCode.InvalidOwnerValue);
+            string mismatch = FindFirstImageCensusMismatch(census, candidate);
+            int mismatchSeparator = mismatch?.IndexOf('#') ?? -1;
+            result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                "p12a.census-image-mismatch"
+                    + (mismatchSeparator >= 0 ? "." + mismatch.Substring(mismatchSeparator + 1) : string.Empty),
+                mismatchSeparator >= 0 ? mismatch.Substring(0, mismatchSeparator) : mismatch);
+            return false;
+        }
+        if (!census.Manifest.Matches(candidate.Sections, out result))
+        {
+            image = null;
+            manifest = null;
+            if (result == null)
+                result = new P12AResult(P12AResultCode.InvalidOwnerValue,
+                    "p12a.census-manifest-mismatch");
             return false;
         }
 
@@ -66,5 +80,31 @@ internal static class P12ADailyV1ImageComposer
         manifest = census.Manifest;
         result = null;
         return true;
+    }
+
+    private static string FindFirstImageCensusMismatch(
+        P12ADailyV1Census census,
+        P12AContinuationImage image)
+    {
+        if (census == null || image == null) return null;
+        IReadOnlyList<P12ACensusSectionValue> expected = census.Sections;
+        IReadOnlyList<P12AOwnerSection> actual = image.Sections;
+        int commonCount = Math.Min(expected.Count, actual.Count);
+        for (int index = 0; index < commonCount; index++)
+        {
+            P12ACensusSectionValue expectedSection = expected[index];
+            P12AOwnerSection actualSection = actual[index];
+            if (actualSection == null) return expectedSection?.Id + "#missing";
+            if (expectedSection.Id != actualSection.Id)
+                return expectedSection.Id + "=>" + actualSection.Id + "#identity";
+            if (expectedSection.SchemaVersion != actualSection.Major || actualSection.Minor != 0)
+                return actualSection.Id + "#schema";
+            if (expectedSection.Role != actualSection.Role) return actualSection.Id + "#role";
+            if (expectedSection.Cardinality != actualSection.Rows.Count) return actualSection.Id + "#cardinality";
+            if (expectedSection.Revision != actualSection.Revision) return actualSection.Id + "#revision";
+            if (expectedSection.AliasGroup != actualSection.AliasGroup) return actualSection.Id + "#alias";
+        }
+        return expected.Count == actual.Count ? null
+            : commonCount < expected.Count ? expected[commonCount].Id + "#missing" : actual[commonCount]?.Id + "#unexpected";
     }
 }

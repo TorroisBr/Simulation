@@ -380,7 +380,7 @@ internal sealed class P12EDailyV1OwnerPackage
                     context.FreeStatus, context.WantedStatus,
                     context.ArrestedStatus, context.HiddenStatus,
                     context.DomainEventRecorder, context.Logger,
-                    out JusticeSystem stagedJustice, out _, justiceReceiptSnapshot))
+                    out JusticeSystem stagedJustice, out _, null))
             {
                 failure = P12EDailyV1OwnerPackageFailure.StageFailed;
                 return false;
@@ -575,7 +575,7 @@ internal sealed class P12EDailyV1OwnerPackage
                     stagedD.Persons, coreOwnerStage.JusticeRecords,
                     context.FreeStatus, context.WantedStatus, context.ArrestedStatus, context.HiddenStatus,
                     context.DomainEventRecorder, context.Logger,
-                    out JusticeSystem stagedJustice, out _, justiceReceiptSnapshot))
+                    out JusticeSystem stagedJustice, out _, null))
                 return StageFailed(out failure);
 
             CrimeSocialAppraisalWorldState stagedCrimeSocial = coreOwnerStage.CrimeSocialAppraisal;
