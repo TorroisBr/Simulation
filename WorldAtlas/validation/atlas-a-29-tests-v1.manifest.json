@@ -1,0 +1,2057 @@
+{
+  "schema": "validation-evidence-trx-package-v1",
+  "bundleId": "atlas-a-29-tests-v1",
+  "format": {
+    "reportProfile": "trx-vstest-flat-v1",
+    "counterProfile": "vstest-18.12.0-flat",
+    "projectionPolicy": "trx-private-metadata-v1",
+    "runProfile": "atlas-a-29-tests-v1"
+  },
+  "tool": {
+    "commit": "c54bd013ed8efe40b292bbd15d06a997c617698d",
+    "tree": "6a32a492452a797a45f333e13bf27d9ef602f32e",
+    "version": "1.3.0",
+    "files": [
+      {
+        "path": "Tools/UnityValidation/Package-UnityValidationEvidence.ps1",
+        "bytes": 4029,
+        "sha256": "9423c3bc4623154e170e37ce2a6ae18d97e1a2765a42c2774e3d2c8ef0553f61"
+      },
+      {
+        "path": "Tools/UnityValidation/UnityValidationEvidence.psm1",
+        "bytes": 77688,
+        "sha256": "d89e6c18efab3ffb3d1b559560ca18d8cc3e164b2f8913ea70932dbda842e14d"
+      },
+      {
+        "path": "Tools/UnityValidation/TrxValidationEvidence.psm1",
+        "bytes": 155853,
+        "sha256": "4f5c172a686cad6761373cda02ccc06b03ebe6e17af037b8c564b6693f6e925b"
+      },
+      {
+        "path": "Tools/UnityValidation/TrxAtlasAProfile.ps1",
+        "bytes": 70835,
+        "sha256": "c09ffb09611e5936abe053110302f673297840cce6ea341b9c45d7ae977ebc62"
+      }
+    ],
+    "runtime": {
+      "powershellEdition": "Core",
+      "powershellVersion": "7.6.5",
+      "dotnetVersion": "10.0.11",
+      "compressionAssemblyVersion": "10.0.0.0"
+    }
+  },
+  "archive": {
+    "file": "atlas-a-29-tests-v1.zip",
+    "bytes": 5574,
+    "sha256": "7244c87bd9caf3f5c65a943e9c764cee0c53463f0af59ef4a8fdec6fdeeffe29",
+    "format": "zip-deflate-fixed-1980-01-01",
+    "entryPolicy": "normalized-trx-only"
+  },
+  "runs": [
+    {
+      "runnerRunId": "e6f63b8b9f2f44ccbff5a11ee8666f4a",
+      "source": {
+        "commit": "3e4ed67aecec74e857f6be080dea0e4f7cad5646",
+        "tree": "b0b572257a580570e8d1a36f7c0480ad937d2436",
+        "originalInputDigest": "0b128c6340d38f86351f2908d0bb4bd4e895e2bf6aacb6ebb60b68bc309eab3b",
+        "inputStable": true,
+        "files": [
+          {
+            "path": "WorldAtlas/.gitignore",
+            "bytes": 90,
+            "sha256": "cda362922fd81f567b440e1a77cb992bfbc94a4e2b5fd5ec0089ec2da56039c1"
+          },
+          {
+            "path": "WorldAtlas/Directory.Build.props",
+            "bytes": 392,
+            "sha256": "626ddcb95dd008b704777055e2dbda1bdbab3dc429f45c2bdae6650bcddaf95b"
+          },
+          {
+            "path": "WorldAtlas/Directory.Packages.props",
+            "bytes": 644,
+            "sha256": "40b879d0c3173775261f568d85181df3c6fb1918337fe7d6609990c395c37b02"
+          },
+          {
+            "path": "WorldAtlas/NuGet.Config",
+            "bytes": 224,
+            "sha256": "2a60d41e8c9c839a51092416c96e70e0dbff10afe3022a9c063ccb4eb9aacdee"
+          },
+          {
+            "path": "WorldAtlas/README.md",
+            "bytes": 4007,
+            "sha256": "266d23dd05496fa694b71665dc666dcaa6ffe77f683058bd403af0ec5d40fd65"
+          },
+          {
+            "path": "WorldAtlas/THIRD_PARTY_NOTICES.md",
+            "bytes": 991,
+            "sha256": "153e460603dca9ce9bb60d6cece8f57316498afca6d7210346997541dbf989df"
+          },
+          {
+            "path": "WorldAtlas/VALIDATION.md",
+            "bytes": 6150,
+            "sha256": "44a018af2e0815a507ff65943ee96ea223c7f143f7fb8d55e8516fecfcc9813d"
+          },
+          {
+            "path": "WorldAtlas/WorldAtlas.sln",
+            "bytes": 1967,
+            "sha256": "64c214166500a92d2ac7dfc396b7ce592c54ca63f4713ad414863c4fab061974"
+          },
+          {
+            "path": "WorldAtlas/docs/REAL_WORLD_DISCOVERY_RECOMMENDATION.md",
+            "bytes": 4911,
+            "sha256": "8c2364792b0df224735aafe88bbf371ec00779223b6946c6a2ea4c899b19c90a"
+          },
+          {
+            "path": "WorldAtlas/docs/SHARED_UI_ARCHITECTURE_REVIEW_REQUEST.md",
+            "bytes": 4359,
+            "sha256": "ffa9ba6fd34c11949fdbe6c151a41b850821095c3695815ecd9667dbed753429"
+          },
+          {
+            "path": "WorldAtlas/fixtures/demo/observation-day-1.json",
+            "bytes": 1244,
+            "sha256": "e833b19e05fb11b5376d3469490b7b592499eaac4fef4df46666ebec38bcc452"
+          },
+          {
+            "path": "WorldAtlas/fixtures/demo/observation-day-2.json",
+            "bytes": 1306,
+            "sha256": "e4f55131bd55dd2767bcb7b1e29c1e403049a5f7a70ba8231a1d9638fc955900"
+          },
+          {
+            "path": "WorldAtlas/fixtures/demo/unplaced-hex-validation.json",
+            "bytes": 1330,
+            "sha256": "281da1033e3b07a247f75714be405f2eae0977b91e9262bc66b1852769d8880a"
+          },
+          {
+            "path": "WorldAtlas/global.json",
+            "bytes": 118,
+            "sha256": "d02fc29ee2ee2f0da10604581d8f72af00255963abc036af2250be3fc4aa8718"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/AboutDialogWindow.cs",
+            "bytes": 1951,
+            "sha256": "164fd406f2c8112c3974ca0ba64d0a4e5f7d0c5126a5c52acb4f50a0fb8c64bb"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/App.axaml",
+            "bytes": 1216,
+            "sha256": "098db8ff7a378d5aca279e5a42927bec825875044fb4ac62b12d8b7b3cac1fe5"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/App.axaml.cs",
+            "bytes": 546,
+            "sha256": "f8d8512c0bd951c1871c74705e48962c1fa418d1fa7b44eb94a99f8adc8c7b8d"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/Controls/HexMapView.cs",
+            "bytes": 14590,
+            "sha256": "2509b78a544bc3aaea975508951b07849228b37ac6bb5217f41443830a9bb229"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/MainWindow.axaml",
+            "bytes": 18984,
+            "sha256": "175c812a59237bda30baaadd4662a1fed7468645bfc5a90df08b2a52b4f882a9"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/MainWindow.axaml.cs",
+            "bytes": 5267,
+            "sha256": "65c31409fb0746873c8952c8a83de5d965d9739fad7207821a9e4cb95bfbd2ed"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/Program.cs",
+            "bytes": 336,
+            "sha256": "74a4cc4fcf081353ce7872631d50aa1859b18d7eace988ac55ec133045d4aeac"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/Settings/AtlasTypography.cs",
+            "bytes": 1377,
+            "sha256": "1d4690b41c1383eda665a556e7df960516dda7d152f303e5f792a1d5b6584486"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/Settings/UiScalePreferenceStore.cs",
+            "bytes": 2334,
+            "sha256": "d8522464e1e9d7ca279e2b7d3b15e579a0e8724284b06cfed09577ca7112d0d7"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/ViewModels/MainWindowViewModel.cs",
+            "bytes": 17819,
+            "sha256": "6b8cdc553bd47a77cf4be0d01f0296e6496a424793e1b1db65909b7c4ee5f991"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/ViewModels/MapMarkerFactory.cs",
+            "bytes": 1807,
+            "sha256": "aae779490126c4781f15e670aa9c6f68eb77890d5f74b880d839a2053f038bc8"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/WorldAtlas.Desktop.csproj",
+            "bytes": 1164,
+            "sha256": "a8c7d5f69cc67fc9be30991868dec8db6159ef1f7d928679da05ac6687800c89"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/app.manifest",
+            "bytes": 758,
+            "sha256": "a4b70340ea91855c5e2311e20f8c5324e5ccd112790643668e622add2f7fd018"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/packages.lock.json",
+            "bytes": 9620,
+            "sha256": "72f9fa5284ebd35bc2337547b200289ccfad2910a2a431b131a81da262d5ef2a"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/Comparison/ObservationComparer.cs",
+            "bytes": 5993,
+            "sha256": "3bba282be5985fa50d9544ba3e03978352dff07c19fc8896cb9823a124beaaa1"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/Geometry/HexProjection.cs",
+            "bytes": 8724,
+            "sha256": "d254881ff1ba2edd68aed1faec457fd9913e86b31ce26441b978af232dc5b1db"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/Geometry/MapMarker.cs",
+            "bytes": 222,
+            "sha256": "1f933ffef3c39d7566ea8e27ee8d0dc83ee1f8506067dbf61051cc07f0dce46b"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/Models/ObservationDocument.cs",
+            "bytes": 3478,
+            "sha256": "7d0dd73904307736931b946c127bf709c994a5d00385e9227435854be3973433"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/Navigation/WorldInspector.cs",
+            "bytes": 5668,
+            "sha256": "ca7377d62901ad05bf27ef4ccc9c9b1e079b6b87770fc3200a7897a5e6e5a46b"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/Navigation/WorldNavigator.cs",
+            "bytes": 3622,
+            "sha256": "839b597a087ef9ed7f54c60ac15eaa257d543109a19f973fa8019e4e7584b0a8"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/Parsing/ObservationFileReader.cs",
+            "bytes": 25608,
+            "sha256": "b6f4c804c32abdf681f9c51b808b8c24e1d8fe9e98e74df43af66f08dbf724c1"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/Parsing/ObservationValidationException.cs",
+            "bytes": 418,
+            "sha256": "42bf0b75ad5c16887dcd5d1146bf4450ed7dff8fa444d92e8206d23cea29e5bc"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/WorldAtlas.Observations.csproj",
+            "bytes": 258,
+            "sha256": "e1f3f5d6264128f8ec3c398b33e0b5ba410814a36a776ca222b411a6f3d97aae"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/packages.lock.json",
+            "bytes": 94,
+            "sha256": "1e39b4149e1289978e01a366893a0697356e855bc7156b7c70747288030042f9"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/GlobalUsings.cs",
+            "bytes": 31,
+            "sha256": "2b6de5e22b1484f3c6bdc71abc323ea574cc7f803dc252dce9fb1f910eb2be7c"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/HeadlessInteractionTests.cs",
+            "bytes": 4649,
+            "sha256": "aa54ef0201a810c2c8a92676af3ec815de6285027be12ba75746d7b9cbb9bb51"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/HexProjectionTests.cs",
+            "bytes": 4971,
+            "sha256": "f5441dcf21811c624d715f809ef034b43c4e49ddbf9fab5b6de1bbb234e709c6"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/MapMarkerFactoryTests.cs",
+            "bytes": 985,
+            "sha256": "054d6cba3e1eb65bd892b75b1ce70254c16d4346c624763ea83d61d711764908"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/NavigationAndBoundaryTests.cs",
+            "bytes": 3620,
+            "sha256": "3b1334a3f0ed30ec3db70d0ed41a7616631d79cd4129e70427c983e5574fd8e4"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/ObservationComparisonTests.cs",
+            "bytes": 5134,
+            "sha256": "4e07f99660b45b99b98afdb7a104c5beb5ae55d1769b1eb7a123eff279d9564e"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/ObservationFileReaderTests.cs",
+            "bytes": 6780,
+            "sha256": "e57e7e6aea0a11722f05263387ff5bd5bb7216c4e98b8eb61494f4d69118918c"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/ObservationFixture.cs",
+            "bytes": 483,
+            "sha256": "663fccdae6fd432ab8bee3fb2785d47f9ae3ccf2ac63ead3e48650d04393b803"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/PresentationAndScaleTests.cs",
+            "bytes": 11407,
+            "sha256": "cfeacd0c9d02ec801418a4d4180176a71377b5a57c4898b96d61cc43f10420b7"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/TestAppBuilder.cs",
+            "bytes": 398,
+            "sha256": "b5bb880b48e24cf0a6c74cd5a0dfa7610016b1f479b4f8e583cf7d109626f0bb"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/WorldAtlas.Tests.csproj",
+            "bytes": 1299,
+            "sha256": "b26ad12a13772a754638060c4ec19ea8f5838b92783f18079b0c4182bc00d323"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/packages.lock.json",
+            "bytes": 13497,
+            "sha256": "81641df0637e3a8000da45ac7b08ed5c06b2cb9b636f804077ee950fab541ffc"
+          }
+        ],
+        "generatedDependencies": [
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/.msCoverageSourceRootsMapping_WorldAtlas.Tests",
+            "bytes": 3066,
+            "sha256": "3c34c72b6905d7934520e85adc05d82f369e215bb9c80f00a43f305f38330fb9"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Base.dll",
+            "bytes": 2607104,
+            "sha256": "007ab726f2bd1f90fb275c90b11f7dc8dda33e0afae382e538f251f30438098d"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Controls.dll",
+            "bytes": 1398272,
+            "sha256": "9781d6a294019b41b1ce0247f9babfbe2e69286d48f96ebb8fd2f1e054c7999f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.DesignerSupport.dll",
+            "bytes": 215040,
+            "sha256": "b4805bfbe428493f31b3bf6fc145b23064ec285b15060d488bf7698b237f8480"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Desktop.dll",
+            "bytes": 15360,
+            "sha256": "e320c0df35d1c55c5b3dd00e09f54a28b9c2163e10a7c4ad85fb95d7d0464825"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Dialogs.dll",
+            "bytes": 242176,
+            "sha256": "6d8021e7dd3d6b16ccda0fcc209fd35ea47150fb1638037a03cd98925b53879f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Fonts.Inter.dll",
+            "bytes": 1892864,
+            "sha256": "9dbe06c3fa844d3f9750fc1dc893f67a5f6c54cd295c96272d8828f748b02305"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.FreeDesktop.AtSpi.dll",
+            "bytes": 564736,
+            "sha256": "5be774eebb740b4c172c92106f394a5a90e1f42586282e436f9591b01efa9926"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.FreeDesktop.dll",
+            "bytes": 256512,
+            "sha256": "0872a401b028e835564ef521f4e9d95d1db0c6b6ad73f182ebca4f849b8c4dc7"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.HarfBuzz.dll",
+            "bytes": 24576,
+            "sha256": "18d9201ada41675cac0ee3dafb22e862f96bc1ce35451b0d7949e7dcb442224c"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Headless.NUnit.dll",
+            "bytes": 22528,
+            "sha256": "2e224befbd4411feaab3f06c6bddbba44ffd28507618400a576699d08d261111"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Headless.dll",
+            "bytes": 78336,
+            "sha256": "9d0b99e7a00e0e638212e2ab1d9b47e33e8db0826be6e33ca0ece342a0e647cf"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Markup.Xaml.dll",
+            "bytes": 78336,
+            "sha256": "9e37a8abf2b121ac9bfe6bb18f068c0851e40e651e3dfa8ea11e2a8e894bc68e"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Markup.dll",
+            "bytes": 45568,
+            "sha256": "24e241f8c3b9c7238b152137ce11783e8b1f4736629852cf7f9d2681fc110f4d"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Metal.dll",
+            "bytes": 15360,
+            "sha256": "a435b841808f59485649f88702bf128ba658266eb6ed5b2c233e203cc4df093f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.MicroCom.dll",
+            "bytes": 15360,
+            "sha256": "d00de2f7562f07a02160198f8c4ece32f3a5116225626b10b5b5fbaed92c6085"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Native.dll",
+            "bytes": 353792,
+            "sha256": "eaa0d5d321eb8bfbf92793c24cf8fb3b8f96b983eb1d9902d1de139415b98545"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.OpenGL.dll",
+            "bytes": 155648,
+            "sha256": "e398d1698820eac26aa3ffca2f1bc20bba2066c4444e48e5b01cac895f709804"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Remote.Protocol.dll",
+            "bytes": 75776,
+            "sha256": "78390d23fa7525279c0dc90c03ec87a886aae150926ba9356c9501cea9efc8e6"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Skia.dll",
+            "bytes": 133120,
+            "sha256": "15915820fa958e79fb74489eeebc92fa5a7e190e1a44fc5cb06fe59e9b173880"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Themes.Fluent.dll",
+            "bytes": 681984,
+            "sha256": "d7b73eb380a74505688cef33b46a650d9989cd3cba0b85d916ca6c06e3f4a413"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Vulkan.dll",
+            "bytes": 197632,
+            "sha256": "ec22f74a05cb1f7b9731b76352cc4cbec545760cafaa8b0f253ef50c5e3e0ce4"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Win32.Automation.dll",
+            "bytes": 125440,
+            "sha256": "b8fd9b9d3815d38470c33b57d3b64ad8f8bf81c7b5b9b05289627c0a0865f1c8"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.Win32.dll",
+            "bytes": 980992,
+            "sha256": "68e483f6dc055e3b03582a2df01ae802e37bce4b1f694685327dddb97d2a6178"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.X11.dll",
+            "bytes": 420864,
+            "sha256": "9efcc81c42dee48ed396fe950173b6c5625d441a7cc8c18468d78089fef62be8"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Avalonia.dll",
+            "bytes": 4096,
+            "sha256": "3709833e0f596afde142d4a5f2e1022aeb684b31abce209f018f8e6d5af25403"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/HarfBuzzSharp.dll",
+            "bytes": 122400,
+            "sha256": "55e72ac23263f8e12484f3435e02ec22fac9eff6e6d169bb0a8c246be6b99d29"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/MicroCom.Runtime.dll",
+            "bytes": 15360,
+            "sha256": "825697d6120f0ec9f506c8cae65c5ea9e44ef1bca106b323e3016198e6c1f50b"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.ApplicationInsights.dll",
+            "bytes": 386080,
+            "sha256": "bf9a4b88c7f94267e1cc7ed0700c575d3eb3266ff25bcb76e4f40f1b0fba022d"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.Extensions.DependencyModel.dll",
+            "bytes": 79664,
+            "sha256": "d8ec4261597a4a119b5bd97770c605f668794a0155707c6a785c41405a7494dc"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.TestPlatform.AdapterUtilities.dll",
+            "bytes": 42808,
+            "sha256": "0020748391a1ae8fc6f3af6f200aae6eb4a25b9c7dacb533ebb554ed4b9441c0"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.TestPlatform.CommunicationUtilities.dll",
+            "bytes": 531296,
+            "sha256": "2b869a478c6a18ddf19ff77dde1c6608c031983336f528b7d6d68b2db33f5e84"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.TestPlatform.CoreUtilities.dll",
+            "bytes": 102712,
+            "sha256": "7aaaef512d4efb122ccc89eea54a9f0a737481424d174d6ba2477c674a3f2e7e"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.TestPlatform.CrossPlatEngine.dll",
+            "bytes": 735032,
+            "sha256": "53eb59bd28a22c6af9d0e85c8fc4eb0d65809ae1906e757a67fc03685b377b8a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.TestPlatform.PlatformAbstractions.dll",
+            "bytes": 53048,
+            "sha256": "f7a0ee54ef6340e13a3bff85cec0ba6f77151b06f49cc92edbf4419355bc99b9"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.TestPlatform.Utilities.dll",
+            "bytes": 69432,
+            "sha256": "94dd571445ca0a6e106b661a4d950ad0d84d31de1a1a04ee4ceac49c3bdc049a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.Testing.Extensions.MSBuild.dll",
+            "bytes": 108856,
+            "sha256": "57d7a6f5af547db24c3149f658ede7383848c78f865168bf8c578b037b50cdf9"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.Testing.Extensions.Telemetry.dll",
+            "bytes": 36664,
+            "sha256": "931916d82a7390b6b0748dd62c73f9d0b9f42dca0a559d7fd541abaa2da95800"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.Testing.Extensions.TrxReport.Abstractions.dll",
+            "bytes": 22328,
+            "sha256": "7926dd03e4c2ccfc62557b73170da722daea9a9763b85063baa2e64b66b4275a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.Testing.Extensions.VSTestBridge.dll",
+            "bytes": 98616,
+            "sha256": "b960a5f9259fe4b091dc73f40177929894ca1c21f5a0b5221ac45d67a6aea6c9"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.Testing.Platform.dll",
+            "bytes": 1407800,
+            "sha256": "2c5334a70787fcd6d1e594bd9f87a371dfd97bef69d99a556f4cef71ca5f2423"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.VisualStudio.CodeCoverage.Shim.dll",
+            "bytes": 17208,
+            "sha256": "a11eb5dde35a30fb416229ee60de6d52f33e97666d92a8b3030ea4e71bd9735f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.VisualStudio.TestPlatform.Common.dll",
+            "bytes": 252768,
+            "sha256": "42194c3073cfce7166a8aeb59c75fc2e69a2c917f8054b8da7e7cd098834a8a6"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+            "bytes": 355640,
+            "sha256": "954816d202190a5c4e861548f1319ee612b898cb56ad24fcd0ef1de921a10eb2"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/NUnit3.TestAdapter.dll",
+            "bytes": 182272,
+            "sha256": "0f837859814a3e13d79bc908ce0d5f86f82f89268b2ca2ac12376f69db2a4cad"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/NUnit3.TestAdapter.pdb",
+            "bytes": 66460,
+            "sha256": "639ece25e81ec1d91645d8068de3426a9890b026b51bd04e8d7c1fce5d3acad5"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/SkiaSharp.dll",
+            "bytes": 489824,
+            "sha256": "aaaaa18c68ba1f3a3408b00dff28b11d5705198e17ba9d3aa59222bfd35407c8"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/Tmds.DBus.Protocol.dll",
+            "bytes": 232960,
+            "sha256": "60a1c5255731d8ac843cab53108be8ba1ed02759ce3db0da5b49939ebe97bd8a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Desktop.deps.json",
+            "bytes": 23442,
+            "sha256": "519e31216340f42c0cc8d49b8276a5695053e94e4883c2d318e9587903f7e351"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Desktop.dll",
+            "bytes": 104960,
+            "sha256": "34c067cd5ccae2eec1a4a25a314b3b89cdc84179b25ee1ad350ef360abcf8e38"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Desktop.exe",
+            "bytes": 162816,
+            "sha256": "3bf795c63694d8f3b8451ad70afbe748fe6975e371a50a7c5bfab61beb99b5aa"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Desktop.pdb",
+            "bytes": 30328,
+            "sha256": "a32ca442261ac71b5fe4f7215179d692c7f531831b41659eb81a72f0e8a3c10f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Desktop.runtimeconfig.json",
+            "bytes": 342,
+            "sha256": "c230a317a54dd960bcbeb5f347f52e18dc665a26f7efda2159fced9a5ac7e097"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Observations.dll",
+            "bytes": 88064,
+            "sha256": "414ee978342a27a052b501e71ed294c0be3dc4b0a137abf7a887ac672d7f9da7"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Observations.pdb",
+            "bytes": 26488,
+            "sha256": "29325744eba1ebf5f50e1378ef9f278ccdcf8220279af417cf583f7435f032b7"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Tests.deps.json",
+            "bytes": 53525,
+            "sha256": "5ab850f3484df2297f13ebb5d691ff941783ede7a6c991c8a76f26fba9cd51df"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Tests.dll",
+            "bytes": 68608,
+            "sha256": "0cbbf13c0fa1ede0f21173c309e14d04ad0a9f62188e7fcd6359f9d22b5b6f2a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Tests.pdb",
+            "bytes": 22464,
+            "sha256": "d6f298b8affc9181b8e258c07a88c6b14e32f41dc861429e5497b4452d2f41ae"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Tests.runtimeconfig.json",
+            "bytes": 390,
+            "sha256": "a217d17be0661abf2717a26937c6e379c33542cb6f292fd3fc5a2d5113a9d6dc"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-04f3d0dc07b547dcbbc3cef0bc8462e4/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-068949af98b241729eff67e6632e5d76/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-087efa046f1f4a7f9c7f976c0adc969b/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-1f51b1e06eea4412a0a6825baad08935/settings.json",
+            "bytes": 22,
+            "sha256": "183ee47a7b5f7d29e4a93c3b01785e89ac6b0cdd8022e97fa12ed19c506d4894"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-23a9acac6a144cc4905987a5fa5872b1/settings.json",
+            "bytes": 22,
+            "sha256": "183ee47a7b5f7d29e4a93c3b01785e89ac6b0cdd8022e97fa12ed19c506d4894"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-27e7d5b7ca514bf59609a8833801fe12/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-28045073ca614f66a787d1d3dc863dca/settings.json",
+            "bytes": 22,
+            "sha256": "183ee47a7b5f7d29e4a93c3b01785e89ac6b0cdd8022e97fa12ed19c506d4894"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-2cdb00643cc448dcb58a618ec6c1ccbb/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-2ecdd66ba61b4d1c9f3d400d034dbe28/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-30090b9069f249c2a9c032f22d6132ce/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-3ae154c3c67741e38f26e16ea17dc459/settings.json",
+            "bytes": 22,
+            "sha256": "183ee47a7b5f7d29e4a93c3b01785e89ac6b0cdd8022e97fa12ed19c506d4894"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-3b3ef57328ee4f5583f6fa8550eef8fd/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-3cd6c281b3ab4c5f91960b7cb6854ca0/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-443f2620db8242a496b64f713101156d/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-474008437a1b414893ca3118d7da36c4/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-55b1118552dc4204add9285fd32feb45/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-5deb826f1d5e47ba876fcaa8d01c4cb3/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-5e109f7d8f224633a48d76c8fc409b38/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-5e3220c171264e219a824653cdbd8943/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-5f7ebfec77254fe1bef0b9fe75b033dd/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-63af588b7eca4ef1a7a51f1274d7a1b7/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-67999ac73bd342dcbaae68cb182dcf21/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-68d0655938354369a957ef5ccd6ef2a6/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-75792a314ea44f69b17ff61218d24763/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-75aabb32e7ad4c0ca974dd10c98c0cbf/settings.json",
+            "bytes": 22,
+            "sha256": "183ee47a7b5f7d29e4a93c3b01785e89ac6b0cdd8022e97fa12ed19c506d4894"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-7e53761181bd4b97b705c8a1bcd5c856/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-86c3de4a64674d64b78b7fcd67ad745f/settings.json",
+            "bytes": 22,
+            "sha256": "183ee47a7b5f7d29e4a93c3b01785e89ac6b0cdd8022e97fa12ed19c506d4894"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-8bb2d74187254b519dadda6b4c5aad0c/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-9955d3ea50934864a53b7006dd4f163b/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-9c3e0437237840529e8921d5252a6dc2/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-a2498ff8e1f74ccb9672500939044c3e/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-a29ead5e168e43138dd307ca89a67b55/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-a457e5c3f1f74511a8caace0a7b998f4/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-b01882deec7a439e983211be9815c82e/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-c24c037f6af7437eb851c9cccf718eb0/settings.json",
+            "bytes": 22,
+            "sha256": "183ee47a7b5f7d29e4a93c3b01785e89ac6b0cdd8022e97fa12ed19c506d4894"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-cad7d283c1f1488081cd0af1219bbe2a/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-d5697d06f8eb4919972e627a0e6be034/settings.json",
+            "bytes": 22,
+            "sha256": "183ee47a7b5f7d29e4a93c3b01785e89ac6b0cdd8022e97fa12ed19c506d4894"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-e4e38a93bdb04246af7f4f26878f3840/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-e5c54559f30e46828aee23e6e40919c8/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-e6b55232cc364fb19f5edadfce2c3642/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-ea692db3afdf4f4a8bd8706bcf9757bd/settings.json",
+            "bytes": 22,
+            "sha256": "183ee47a7b5f7d29e4a93c3b01785e89ac6b0cdd8022e97fa12ed19c506d4894"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-ed5f100b331c4734a171a005a1a19490/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-ed774418b5054d0b98de76bae8b393a6/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/atlas-settings-fc64733f6240485891c3f8e0e059f8be/settings.json",
+            "bytes": 22,
+            "sha256": "56286961a6b2bfee2394669809d42b6fc3941a3312d27a7651e87b371a6bfe97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/boundary/WorldAtlas.Desktop.csproj",
+            "bytes": 1164,
+            "sha256": "a8c7d5f69cc67fc9be30991868dec8db6159ef1f7d928679da05ac6687800c89"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/boundary/WorldAtlas.Observations.csproj",
+            "bytes": 258,
+            "sha256": "e1f3f5d6264128f8ec3c398b33e0b5ba410814a36a776ca222b411a6f3d97aae"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16184,
+            "sha256": "de7322751c4b31e67c7758af6a48d4919b1d1e41f5d12d1c2542da0f9b9f342e"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17208,
+            "sha256": "ec638cd47839e6cbe3c0aba2374d8d6539525cda6f41f188f36dc637549ee989"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "b44a4a0914962d934e7774aa57310ec6a813f62fe2051aa82c09c2d57c00bdd3"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 21344,
+            "sha256": "e8590d68f7989f8dd52a6eaf32807dd32a3b5989bd73485ac17fc44dddb06f3a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15200,
+            "sha256": "85554539e43803af715fa6b6d1b0a3041b1d51dca297edfb9aee4005b2a69a36"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15160,
+            "sha256": "92bb9be3c34dc00f4b4021aefe43e7a44074788e0eee0bb23659f6d7d87073da"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17760,
+            "sha256": "4d3e976438b8defc2a1e174d3407cd77ce4c8dcde478da7b35f508bba1dddc2f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 82232,
+            "sha256": "20530c635c0f8c212d72307da2111bdd8b88fe7740c04e637dd9d96549a5229a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 21304,
+            "sha256": "276ff698a09c1cadbbb4447ce2f05eb938395ef5d2add7512b3f77fab0ad7acd"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/cs/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 23352,
+            "sha256": "c3b928fa4a6ad19763bb72c4b64d2eb881a8ebdffb6e1ae30782d3b5cb3b14d4"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16184,
+            "sha256": "de2c5c0b11f8559e5fdda26ed73a9bb38df55837c4ff89ee655955d50f9e4387"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17208,
+            "sha256": "da4a8fe8cf49e02de27d5ed74da59aefe9cec8e3dbccf0e54628e8bdcb0f088f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "4a17d298e9d2e3b6435c063688ccde04fee6a9a21f5213d3d36d5ad00aeba8a0"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 21344,
+            "sha256": "c671763f94dd4a58f01692b0955ff95a2478a00ac87924521272d87d03934ec8"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15160,
+            "sha256": "e0f53b721476b5e870adf4f83511f9411e7b46ca1c585c720281d86c3b70636a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15200,
+            "sha256": "1c3c74be3d64baf14083947e6468badaf5568e05d61831ba8c282b7992e4e239"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17720,
+            "sha256": "4b822617bc8d2f743c3e8ffdd25a6260bcc4e05ba9ad9b41004d387d16d2b76a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 84280,
+            "sha256": "b10c541e1f5f278645c9dd5f392960267d103fc5d6f7fdeba2c6fa67d5103adf"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 21304,
+            "sha256": "69de43e5a19b67c044e8c81eb5113797d7246fdd6f4d76d931e29a47767f15b8"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/de/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 23904,
+            "sha256": "ccbddc806cea845c9fdcd29863f60390b24a8bedc43acc3d4bd3a19f5cc38791"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16184,
+            "sha256": "cadc14bce74fd8b3a01e2df51c4b64c852f1b0c8c87214dc30283c90689f468f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17208,
+            "sha256": "9de13650092003e0c1f12ccae6ffa945b2e4f403626c2f7b7cfb6dee117e3392"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16736,
+            "sha256": "7a5ad57f8f19f8d7ea7e0b888022f523fbf70254d0ee76405c7cd54f64d376f8"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 21304,
+            "sha256": "72bd0cc860eba14ff88dd540104869d522c845c7053c8edb9e23c1d6ec200b5f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15200,
+            "sha256": "bf2ff008136368203b73241ab4ad519f1da24edb0f14d33c980f60788a057d77"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15200,
+            "sha256": "80a711d941d55a18db128e8241c8298329bca58d8c9e54b22d11e3ce0262ef80"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17720,
+            "sha256": "148f0e09a8326636d221290a51f107be848b4f03869a693bc2fd30a4fbdfdbf1"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 83256,
+            "sha256": "56e6a0a9f51e82a2bfaa99f28c2f17b8d7bbf747c8f3f37f3081bd6987f691e8"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 21304,
+            "sha256": "128ff8c25dcef43c0120110adf45043ad1961bf3c1efffaf9a24f615026ba0f2"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/es/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 23864,
+            "sha256": "db39b1f9082c4c2d7e46ba8d520a7c9fe8a3841e2278ae99e8af399909117f64"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fixtures/demo/observation-day-1.json",
+            "bytes": 1244,
+            "sha256": "e833b19e05fb11b5376d3469490b7b592499eaac4fef4df46666ebec38bcc452"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fixtures/demo/observation-day-2.json",
+            "bytes": 1306,
+            "sha256": "e4f55131bd55dd2767bcb7b1e29c1e403049a5f7a70ba8231a1d9638fc955900"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fixtures/demo/unplaced-hex-validation.json",
+            "bytes": 1330,
+            "sha256": "281da1033e3b07a247f75714be405f2eae0977b91e9262bc66b1852769d8880a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16184,
+            "sha256": "c9f7771af75dc4b6b9f19065701b3ca895569fed9803d71776d093c026c0243c"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17720,
+            "sha256": "36015a0a45150fee1b0f7be26ae2aa420e0892783450e535f4dfa78a50e1d110"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16736,
+            "sha256": "25af3ea27248cc69d7819ab67e3e4b66a26baca8acdd9531a4f6515604b9fd05"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 21304,
+            "sha256": "d31424f925625b1c7ff1be0c60d417dcce2ac3d0abdae28c08afdb7b80e3a99c"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15200,
+            "sha256": "bf28301480f3d0599aa458f7879e884976f3e5f09d5afcca0a46e0c14b49fe62"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15160,
+            "sha256": "3da785cde39e6b1753afea3dd07da1477b94c8b79c692b8b5174e50f783b8ec0"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17720,
+            "sha256": "04d842163bfcd72124adcbe720194669e73cae4be5e851e591821d806bb077d5"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 86840,
+            "sha256": "f1382a259fa1172d1e87a4c03827b57466cc6697f5253444a19e76be72a0e80a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 21816,
+            "sha256": "deed14fd1ea2e00a649e5d41c945ae53e1312eef66422dd3d3a6a79fcf9bb5e7"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/fr/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 23864,
+            "sha256": "183725c5cc0c89733eb58b2484ab9044e41859d052dd8bd8a7b5c21a949367ac"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16224,
+            "sha256": "eaee6d04356a3391c94be45aefe006fa4bf889aa5c052c215053144911e889da"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17720,
+            "sha256": "d649599a8fca222309b0872575738edb76209bb19da3a048089453fd5bb00e45"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "4861dbe01ee7564988c2957754495bd688b996942d3983af082fe1a360fa75ce"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 21304,
+            "sha256": "89a0b0549f01b448f7c9536f8c75eca5ce344c5f4458de373ed1a65dd1fc92f9"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15200,
+            "sha256": "95e3c5486555b2f42c61fc0c14bad758ca6ec3788f6195a357457e38ecc0458d"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15160,
+            "sha256": "2c1f641c1486d688606676491741c4c99cbd3b312a351f873209b500ea5b15b3"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17720,
+            "sha256": "790e1d95b3900d7c793bf6307f7919907dd0675a418575c9a37aad635a0c872f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 83256,
+            "sha256": "ce8d569746e79cbcc400ec125c771adf6d194cd364d6b0d92f9b7e3d1601b688"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 21344,
+            "sha256": "ec83c1de6a1e0e4c47ebdf401c8bc03cde2074f5ef92780b0f24af88a6d44e40"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/it/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 23864,
+            "sha256": "9314ae512b856cc0b3ec2cdaaa0377fa1827edf8e5b06b53ec823fa4bec4b12b"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16184,
+            "sha256": "3ae00b8b0eedd9523b6501e242fc8479311bede7846d73b19fc3bb07483424e5"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17720,
+            "sha256": "4539f1f0d41e24858a18648819351bad11879ba5edf26cc2342b86b8512480cc"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 17208,
+            "sha256": "adf88844226fb8a2263df972c015fa5159e13e287c1af28d18d68a40e34935df"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 22328,
+            "sha256": "f5509bcd3af9caec12c494aa9935674cdbc3fdece71f8a001883313ac3604826"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15200,
+            "sha256": "3342447ae772a82a9c9f22d029b6ac5e65460e77e79ff4102d998eb82bc6a037"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15200,
+            "sha256": "4e373002b35696a50dcf66699136ba1ef9e5e404835315314d274f15aecfcabd"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 18232,
+            "sha256": "4caf05277ca20ec051f1b767f4cbabaffd528642522520e53c973df2e816fb15"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 90936,
+            "sha256": "7015cbfcd3e1699664afdc86fee81da21947560a1d6acafcabdb595d99894c8e"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 22328,
+            "sha256": "a6e62b843884c263ee552e1f8d2a404f732ded3d034574b1885be912c6b153df"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ja/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 24376,
+            "sha256": "24901ee1e1601206178bd117a7f36376a90b14673da57144586486e6144792b0"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16184,
+            "sha256": "fc56317a74d7bd56c8c371b8a9134b7237a1f492abde25446b8c94649bea7e73"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17720,
+            "sha256": "444c8d3484390b5ffe50c1f62e7d769e941d22ea18fa184df1aa50a4fc8080cf"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "34e015cf1e4736201a589511a4a8ffb1ede27236d716ea1701902f9197858e5d"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 21304,
+            "sha256": "5292da246fcb06b562df7433019d465c6f8e61e70e64c03217b896918ebdbdd6"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15160,
+            "sha256": "5873d8119cc292c37656f66853500cbe8234ab3eb42d22c099e2077063d7e656"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15160,
+            "sha256": "bf7a40725a52d4d3729a66a121df58b88756353f173d880a92c03c8c288ce90d"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17720,
+            "sha256": "c128cf9545a48b7953d9314494d68093ddd3219b06db663838a7a05747e6ab21"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 84832,
+            "sha256": "2fe50a91c53ad7f7fc8357edf8ca70a1eb769393ad8056497b00842d81e0eced"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 21304,
+            "sha256": "11aebfabcfe02fde1de63beda441e527902f312921746de57ebe06cad14094fa"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ko/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 23904,
+            "sha256": "8f8ef0744b011c079aa030baa3074efcda17f5932f6a200ec67cbef48acbeea4"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/nunit.engine.api.dll",
+            "bytes": 19456,
+            "sha256": "05c632a930c55a87305e73a58a896a79fac8dc2038c02cdc9aec30e30fe9c526"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/nunit.engine.core.dll",
+            "bytes": 107520,
+            "sha256": "7f4758e81955a75d226e5af8429172f0183ae46d5441506fbf27df1a6b2affef"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/nunit.engine.dll",
+            "bytes": 49664,
+            "sha256": "14dd0a981457344395839eefa56a6fb5043dcb77d0f17eff8f4a65a121e6f945"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/nunit.framework.dll",
+            "bytes": 589824,
+            "sha256": "1e19ab667f5782e24a5ea4b1b7e64b4521c93fd925098caf5e40c3ee1ffcb2d0"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/nunit.framework.legacy.dll",
+            "bytes": 78848,
+            "sha256": "b24a44226e89b6ae5b5cdd07169e195769d3e50489ecfaad55130adcd90d2d92"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16224,
+            "sha256": "9bd0c03a67b3be9d474f1821cfa1a01831611eead59af10239541e8d20fbab3b"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17208,
+            "sha256": "0531a3ce1a860acfa3a88acd3e82f278c7dbb50c05342af91b366132f583bf97"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "657447dec53140006325ec6bc7997cf113637eceb6465bd7d711199fac509c04"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 21304,
+            "sha256": "3aa6de2042a9835b831ccdfb712de16e77aec523e4ece55c14a480f6aef6a4a7"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15160,
+            "sha256": "70f5c9656c1648f2038190c82f4863887f9ab56e67bec1351ad45f6f5f4c1f8a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15160,
+            "sha256": "222b985b9e9b64df734c1c80a02ee31c6456158a602f565f76c4fc2848fb9a51"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17720,
+            "sha256": "483144241c91a38baaf399d04285d5202223b27d5673bc0be620e714c226ec44"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 84792,
+            "sha256": "cc07535d9c9d873d8372a00fe39e8259a17e12a84ad469ce04424215682c2479"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 21856,
+            "sha256": "4ce90e7f08a40e9aac6cf6907c29f84ffe0aa8a4d25f8a3e39f7f0033c4b0f38"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pl/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 23864,
+            "sha256": "222a0e54cfe59bb59d44b95f0ace3c6b5cd555f9ccf7b4335d6ae5832b0acad5"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16184,
+            "sha256": "d0e6cf7f0962bfd86e791d073d251d63fbfb1233c70336e1bbd9ed92a61386b3"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17248,
+            "sha256": "5809fcc67246c4edee8a655a54826cb99e6007b9db68b8b1909420c81b9e6825"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "5f1ef9876d484038754fb3851b7941d3ab2ca827831e0b97a2dc9badd278db5a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 20792,
+            "sha256": "c9c549ae3fc1f2ddb5b859d11dfc4cb8c35035291b1818e3ddf4f3cff699d6db"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15160,
+            "sha256": "0409dbb8f91a5c2d6d1727b7a74929f7e3ec68ac5db395d9edfc05584a0a706b"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15160,
+            "sha256": "78374f03da1e451074c4d7fc890d10405349f126acfcd2265a1566a33f7313b8"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17720,
+            "sha256": "cc477a8679fd76f0055dbf30e89947e81150fc8f97e0590a4b78d87245fc8fe1"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 82232,
+            "sha256": "607ad3f363f4ddb11099eb48578e2e14a54ac94d49a1d166ce91cfc3f171560a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 21304,
+            "sha256": "3ac353f521c0ef343ab61c406ca5e303514370680949a432810d5f9d7a07d963"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/pt-BR/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 23904,
+            "sha256": "574d82520cb12aa28834210a4fb0225d138ddfb8a60e20b948b8129e32b7ba71"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16184,
+            "sha256": "3405367b3ffec95619538db9d663b79d4b604b971d6840615183154b8c6e0f84"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 18232,
+            "sha256": "48edf692aaf62d1f2b93b8ad3c4b2d7c99bdeda5b89e189322df6f220f3e53e3"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 17208,
+            "sha256": "4b77ab967f2324478007e61351f49f4c33f8845bca0de69911129e26a4b41d8e"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 23352,
+            "sha256": "e558f5482f62fb7bcac4d73cc86030c449734feef1ce5f211e19f7e39bbc3d4a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15160,
+            "sha256": "525f949e0acde88819cf772c8c7f1d176fb1b6dad258562123dcab4ce12fc698"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15160,
+            "sha256": "8327750bf3b8633b89d1cf1941f6a2cf23408f13d47d1e6743a3b8a4209a08ef"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 18784,
+            "sha256": "953db5ce2dda16c5bb7e56b5d32c34e12a5622f833a86cf4d1519aa79d533181"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 100152,
+            "sha256": "ba8f2a87b4b7641fd169686d50ab3e82f9cdff5cdf9eeda6e6b2e1aa2763da7c"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 23904,
+            "sha256": "6b0c557916aa0dcb81bc8b71f1d301fb182637217bd484f005098e02a8e68f4b"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/ru/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 25912,
+            "sha256": "d8ea2c31e056a36bec9345eab5c4b378fdf38abb1e2664f4ac427119ca077d65"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-arm/native/libHarfBuzzSharp.so",
+            "bytes": 1988676,
+            "sha256": "7a7bafe7d89c5d361a3890e044bdc5993b234831e5c8c1f768260828969ec007"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-arm/native/libSkiaSharp.so",
+            "bytes": 8008960,
+            "sha256": "7896ca61cbb9fe9f4f9f7669595329d8a688f9ea60ef8d103701b7b9441b7699"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-arm64/native/libHarfBuzzSharp.so",
+            "bytes": 2657280,
+            "sha256": "68fc5ef842ac0dbd57e8063a11de5bb2f3c2b5af530a2d4fa07a7cf5d6ea4259"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-arm64/native/libSkiaSharp.so",
+            "bytes": 10848184,
+            "sha256": "87d2d56c49a9b1d1da618dfa20994ee213f752f9ada04e085703115162997aef"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-bionic-arm64/native/libSkiaSharp.so",
+            "bytes": 11319400,
+            "sha256": "03ff0a09dc95d92b85c91cfbd87567793fe095f2fb1566f6b21bf6ae048c7ea4"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-bionic-x64/native/libSkiaSharp.so",
+            "bytes": 11068032,
+            "sha256": "db79508d5c6c6234b127f4948b64b96e7ddcb08e6495fe4dfda70ea187137af6"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-loongarch64/native/libHarfBuzzSharp.so",
+            "bytes": 2721088,
+            "sha256": "e3f25c2a81f919fd0297023504bf0655b626d5d47e569724827cca7d06f9c3d7"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-loongarch64/native/libSkiaSharp.so",
+            "bytes": 10483856,
+            "sha256": "94f65c8536514d4fd2f78568b634bf73acfde22e4dd427615584f58d8e05ca30"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-arm/native/libHarfBuzzSharp.so",
+            "bytes": 3017916,
+            "sha256": "fa511560f4420e0b420eb73fa8339af5c6683d71403c611af8ca6ce366f01494"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-arm/native/libSkiaSharp.so",
+            "bytes": 14668520,
+            "sha256": "ebc2baff6958516a8d16818af690c61678d7cfe4af8322a35b33d9f8d08f2b0f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-arm64/native/libHarfBuzzSharp.so",
+            "bytes": 3880784,
+            "sha256": "aa71a80195e31d55b7045bafdc6ec5895b69785cd4b39a249309d3c9fde3e280"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-arm64/native/libSkiaSharp.so",
+            "bytes": 18546520,
+            "sha256": "6b5b1a4f4ee4def48fc4a50f9c5a686c47661b5acaf0150dc0b462b30070b925"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-loongarch64/native/libHarfBuzzSharp.so",
+            "bytes": 3577960,
+            "sha256": "82befae55055053a65fc66366b2c75081c28463058c79295d0ef38c6ec2df97d"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-loongarch64/native/libSkiaSharp.so",
+            "bytes": 11909704,
+            "sha256": "9ac3dd56dfd62b2f767767f28ace0b8125680dfab0838193de2864e094299ed9"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-riscv64/native/libHarfBuzzSharp.so",
+            "bytes": 2586112,
+            "sha256": "1d0c376dae6362986a294737cb7b2580e6416c007d4cc25aba8c9eac916ffc10"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-riscv64/native/libSkiaSharp.so",
+            "bytes": 9977720,
+            "sha256": "a8eb81e33709fc19003e16d65129f3dec54b6bd46304115b695fb9cac1887342"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-x64/native/libHarfBuzzSharp.so",
+            "bytes": 3908472,
+            "sha256": "f4b0c632dd41e8000b647dbc463e77602d915ab99914239c8c25a1858430c83f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-musl-x64/native/libSkiaSharp.so",
+            "bytes": 18453464,
+            "sha256": "59039b2548e3a3f563fa247f582c62d280c2015df78316fcab62e383d7ae9d4f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-riscv64/native/libHarfBuzzSharp.so",
+            "bytes": 2318920,
+            "sha256": "b0a7dfafd7edfecce56819026741e56c8e46b7e8a422a1a1935d392bb8fc3c39"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-riscv64/native/libSkiaSharp.so",
+            "bytes": 8627760,
+            "sha256": "e6dc641e3b049261c9d3d402660ff31e3a23160b1498081a4cec63feb9249c21"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-x64/native/libHarfBuzzSharp.so",
+            "bytes": 2808040,
+            "sha256": "1d5c3afef13545bf34bf8f068b14e25ee619c3b6dee235c44e260fe61cb24018"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-x64/native/libSkiaSharp.so",
+            "bytes": 11170296,
+            "sha256": "66c856eaf1a47a00b23204c30c6ee407987bf5086ecc0a1a6b4fd67526b0cd02"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-x86/native/libHarfBuzzSharp.so",
+            "bytes": 2735488,
+            "sha256": "9171121cc7c5f76d13e3458ea17e9eb6afc74f38ad0e6e2290f050e3557afb42"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/linux-x86/native/libSkiaSharp.so",
+            "bytes": 10358832,
+            "sha256": "5984f467bc1a867543ea3bbb1d0913053b88ae52c4afca21a6412816be30d045"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/osx/native/libAvaloniaNative.dylib",
+            "bytes": 2093600,
+            "sha256": "eedfecd685028be8625b5c2335376a8836df1e465daf48e333878d1bd4cd393d"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/osx/native/libHarfBuzzSharp.dylib",
+            "bytes": 2922800,
+            "sha256": "b2d7d39a46954b3d7310540bdf393f398ac4194ee029b995deeb1db0c161c43d"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/osx/native/libSkiaSharp.dylib",
+            "bytes": 15201456,
+            "sha256": "e09f07ae1df62ded475351f56d8dc8366cd679043f28b65d9dee597a5fd0da6c"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-arm64/native/av_libglesv2.dll",
+            "bytes": 5145776,
+            "sha256": "85e3b1103246320a4243d327d678e749a2831675ff24793ce0c0f6697150a6e7"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-arm64/native/libHarfBuzzSharp.dll",
+            "bytes": 1924640,
+            "sha256": "be8e25fcfaf44eb89a9bd62a0595eee006d832069c636a384b7b6b70e3c398ab"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-arm64/native/libHarfBuzzSharp.pdb",
+            "bytes": 20967424,
+            "sha256": "289947fd566b17a80e39d934ace98092cf81220b278e15c75b1ac4cc5ce729b2"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-arm64/native/libSkiaSharp.dll",
+            "bytes": 10411360,
+            "sha256": "f7409fcfc3557e272d3e8df2dcd6f737ee5a68b09fdbc6d6ff8c9a3c24b2e36a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-arm64/native/libSkiaSharp.pdb",
+            "bytes": 84938752,
+            "sha256": "068c4b775d2bfce0d377762fa4d283f4111769fa3cef1c089ea18e12249f03ca"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x64/native/av_libglesv2.dll",
+            "bytes": 5394096,
+            "sha256": "53191a77fe783cd757ca7767077c2a64a662e7043777a5b4ab74980d4a0b73e3"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x64/native/libHarfBuzzSharp.dll",
+            "bytes": 1816088,
+            "sha256": "145ade963eba427027d5e1381db5d51a0ef9e98e9fef9efbfa6074ca20da246f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x64/native/libHarfBuzzSharp.pdb",
+            "bytes": 20918272,
+            "sha256": "4300d75d5af09fbb79d565d9a18573243a93214c811d4f24a33f11f0d4242d93"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x64/native/libSkiaSharp.dll",
+            "bytes": 11628896,
+            "sha256": "7dec3ba900ab353491e6446f0083739924c6f8dd668832e2f09d38ebffdbbe1c"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x64/native/libSkiaSharp.pdb",
+            "bytes": 84033536,
+            "sha256": "9fa70aeff3122bcceae15cd89d9d2f3c88c8d382122ef70ad694a76d119dcc6e"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x86/native/av_libglesv2.dll",
+            "bytes": 4794032,
+            "sha256": "1e4df6ab43cc25cdaa5405048cb1088b5ca26660adfdddaeaf88c8954464244a"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x86/native/libHarfBuzzSharp.dll",
+            "bytes": 1518624,
+            "sha256": "99a97ab4b2b4b60f37930584d79849bd3ef2d1252c51ac47df9805deb08912af"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x86/native/libHarfBuzzSharp.pdb",
+            "bytes": 20705280,
+            "sha256": "d830a0134f7dbb1cc6002542fd874d87edb415de3e8e3e841d1306ec6f528a54"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x86/native/libSkiaSharp.dll",
+            "bytes": 10124128,
+            "sha256": "2e49b47ff56a0f6ccf61932d33e01e9046c319da35bbb16f9ec9572a9dcf675f"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/runtimes/win-x86/native/libSkiaSharp.pdb",
+            "bytes": 86761472,
+            "sha256": "0636110c85e35a4acabd8df236e4a9410c2ab65258a929b92864817ee790f2a8"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/testcentric.engine.metadata.dll",
+            "bytes": 177664,
+            "sha256": "55efa956cb6b9682e6508dbcef41d7506030e660796e29c87cc42f4c1e043e34"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/testhost.dll",
+            "bytes": 49504,
+            "sha256": "3e9ac238400d8d72cba32776182060a5421c7630da7355360c46c0763df9043e"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/testhost.exe",
+            "bytes": 163168,
+            "sha256": "679d4800d582fa53b6ac1a78688f2b8bb976ffbcc8034f5f5c9be3f61fa36420"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16224,
+            "sha256": "5d9de647618bd29410e245f084018ccb59b3d86027d336627c3427db88b35e68"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17208,
+            "sha256": "1ada58b602a5d16d5f812a647623798990c9ff80bdda0381625e09df41b05413"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "b120514a98afc8832bc07eb68464591c296f43db406b5875029d593373f4aefc"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 21344,
+            "sha256": "68c59f50497080d8977f33d405ed2f31fd0f8ddedfcdb45f14852921fa573474"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15160,
+            "sha256": "3c0c47acdae765ca2e0b87cf1c47166a0d9e40ad00af7a4a645416cba1a98627"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15200,
+            "sha256": "82fa11d8c3c7c3e59e45910ae5ad042a8682aef090202410986ab4ed6644a1d5"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17720,
+            "sha256": "99a32f6fb7f6ff0d2fabf859acbfcef4752178d1f568c5ad3db933b13b69acbb"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 82272,
+            "sha256": "f2877afcb28ec4a64b4590ce2e8d9e479f4df8b571f16298c1bdf5bb9fb79b74"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 21304,
+            "sha256": "f3d903b5b7a4870535f7a61b5e32022e1ae0fdd20fa70812b8827cf27753897c"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/tr/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 23352,
+            "sha256": "acd2c237e86b30c967b0a9ca983ac41323145af282ae69c625eb6d5a5e238bdb"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16184,
+            "sha256": "040e6d175d7dc26ea1f1b7ffce53e19c76c5938c3b69005daf8c51c7e1122543"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 17248,
+            "sha256": "a954ed409001f9b4438cf5fffb83fc92c1bbd8fdfa51367cce92b50bfa1b871e"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "33d09a5af85b987a087214ca487319286a8115caef55ed160100cb845323e117"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 20280,
+            "sha256": "20ac1971943ea2d5e06ad1bd6972c4dccbc49783cdd70ecf80dc3deb383fdd62"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15160,
+            "sha256": "b268615a08fb2b570c1fee0317d57122925f8058f5799e6f9b89d11b01909197"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15160,
+            "sha256": "7bbecea87c0118cdec4d30a2e003e44519887644f16e5ba5ab3b315d5d3b6f55"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17720,
+            "sha256": "f552dd83a1eb923b613194d6b54d4788a992e3292268b9909462f0bbfd5eddac"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 75576,
+            "sha256": "8cf7b8d03ee7703d2a41965e12856d3e407f5b23b07546ca1ff5846d8753e022"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 20280,
+            "sha256": "164f2ea2224e0a36df06fe54afda485f03278360a5d7870f87f05a5feb9a37a7"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hans/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 22840,
+            "sha256": "2209eda37f11ab378305e7dd12aef1f6dee1f21d61010b1a078a67b50b57d3f2"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.TestPlatform.AdapterUtilities.resources.dll",
+            "bytes": 16224,
+            "sha256": "07a1746a71063c05498174db341bb309fab20d7ea85e7e78137379bb5538b439"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.TestPlatform.CommunicationUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "9d7cb93f45d7c87bc167693f528f1aac8f6c9b1ac9e7c075d57e1f7c59bd29ca"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.TestPlatform.CoreUtilities.resources.dll",
+            "bytes": 16696,
+            "sha256": "29c1192de5d47a64edd9f6aa89436f5b8f5470deab55b2523d971845fd1c4768"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.TestPlatform.CrossPlatEngine.resources.dll",
+            "bytes": 20320,
+            "sha256": "455f802bbe7ce0650c2fa2b497f0221b2b2de45c7de2d6c06b970f87ac65aad0"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.Testing.Extensions.MSBuild.resources.dll",
+            "bytes": 15160,
+            "sha256": "d3191142e30657e19518ea7e7ffaac4c3546721f692f55318376d96feeee4c1b"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.Testing.Extensions.Telemetry.resources.dll",
+            "bytes": 15160,
+            "sha256": "ac8cb01488dc9675595b4274ff83a36108c5738424d1f5e8816f2ea6099f4a45"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.Testing.Extensions.VSTestBridge.resources.dll",
+            "bytes": 17760,
+            "sha256": "43cc046e8106e5d82e66ef1a099c41a91d233ccb6d45f0c4ad591aa25096feb3"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.Testing.Platform.resources.dll",
+            "bytes": 76088,
+            "sha256": "21c5174af7de43d570294abf03551f11eb23e54985f5e4b1c0f78a1847376264"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.VisualStudio.TestPlatform.Common.resources.dll",
+            "bytes": 20280,
+            "sha256": "55944f88563450d62993505d3a97ca77f78e46749e4f4f6a6c1a5c274b6f0867"
+          },
+          {
+            "path": "WorldAtlas.Tests/Release/net10.0/zh-Hant/Microsoft.VisualStudio.TestPlatform.ObjectModel.resources.dll",
+            "bytes": 22880,
+            "sha256": "2ffb5cfdb490460e4fc003a8562b7493305b0fe3414baafdefc5b2754500c4ce"
+          }
+        ]
+      },
+      "captureRecord": {
+        "bytes": 244836,
+        "sha256": "719f990db8fd03e6a6a2215ee51f150b5606940928dc94f347388dabf6331520"
+      },
+      "originalManifest": {
+        "bytes": 89680,
+        "sha256": "69fc2bffde1f02dcabbfac7d2bec9727fa9d125fe23a1ff3e1987a20307b8d9d"
+      },
+      "producer": {
+        "sdkVersion": "10.0.404",
+        "runtimeVersion": "10.0.15",
+        "dotnetFileVersion": "10,0,1526,53008 @Commit: 8e0f8ed2312954727f8919d7d1c2f78b483b4ee7",
+        "testPlatformVersion": "18.12.0",
+        "vstestConsole": {
+          "file": "vstest.console.dll",
+          "fileVersion": "18.700.126.53019",
+          "productVersion": "18.7.1-hotfix-26529-119",
+          "bytes": 665424,
+          "sha256": "14b087bd3a77d0eb809b2d04ef38cae66050cf9efd917b4b9a8f62fe0afa00eb"
+        },
+        "logger": {
+          "file": "Microsoft.VisualStudio.TestPlatform.Extensions.Trx.TestLogger.dll",
+          "fileVersion": "18.700.126.53019",
+          "productVersion": "18.7.1-hotfix-26529-119",
+          "bytes": 243496,
+          "sha256": "e942a5c25eb2b6c986d49f644515d57262b635dc545f4f0407af49ea8f73d6c8"
+        },
+        "platformComponents": [
+          {
+            "name": "Microsoft.TestPlatform.AdapterUtilities.dll",
+            "fileVersion": "18.1000.126.46511",
+            "productVersion": "18.10.1",
+            "bytes": 42808,
+            "sha256": "0020748391a1ae8fc6f3af6f200aae6eb4a25b9c7dacb533ebb554ed4b9441c0"
+          },
+          {
+            "name": "Microsoft.TestPlatform.CommunicationUtilities.dll",
+            "fileVersion": "18.1200.26.56015",
+            "productVersion": "18.12.0",
+            "bytes": 531296,
+            "sha256": "2b869a478c6a18ddf19ff77dde1c6608c031983336f528b7d6d68b2db33f5e84"
+          },
+          {
+            "name": "Microsoft.TestPlatform.CoreUtilities.dll",
+            "fileVersion": "18.1200.26.56015",
+            "productVersion": "18.12.0",
+            "bytes": 102712,
+            "sha256": "7aaaef512d4efb122ccc89eea54a9f0a737481424d174d6ba2477c674a3f2e7e"
+          },
+          {
+            "name": "Microsoft.TestPlatform.CrossPlatEngine.dll",
+            "fileVersion": "18.1200.26.56015",
+            "productVersion": "18.12.0",
+            "bytes": 735032,
+            "sha256": "53eb59bd28a22c6af9d0e85c8fc4eb0d65809ae1906e757a67fc03685b377b8a"
+          },
+          {
+            "name": "Microsoft.TestPlatform.PlatformAbstractions.dll",
+            "fileVersion": "18.1200.26.56015",
+            "productVersion": "18.12.0",
+            "bytes": 53048,
+            "sha256": "f7a0ee54ef6340e13a3bff85cec0ba6f77151b06f49cc92edbf4419355bc99b9"
+          },
+          {
+            "name": "Microsoft.TestPlatform.Utilities.dll",
+            "fileVersion": "18.1200.26.56015",
+            "productVersion": "18.12.0",
+            "bytes": 69432,
+            "sha256": "94dd571445ca0a6e106b661a4d950ad0d84d31de1a1a04ee4ceac49c3bdc049a"
+          },
+          {
+            "name": "Microsoft.VisualStudio.TestPlatform.Common.dll",
+            "fileVersion": "18.1200.26.56015",
+            "productVersion": "18.12.0",
+            "bytes": 252768,
+            "sha256": "42194c3073cfce7166a8aeb59c75fc2e69a2c917f8054b8da7e7cd098834a8a6"
+          },
+          {
+            "name": "Microsoft.VisualStudio.TestPlatform.ObjectModel.dll",
+            "fileVersion": "18.1200.26.56015",
+            "productVersion": "18.12.0",
+            "bytes": 355640,
+            "sha256": "954816d202190a5c4e861548f1319ee612b898cb56ad24fcd0ef1de921a10eb2"
+          },
+          {
+            "name": "NUnit3.TestAdapter.dll",
+            "fileVersion": "6.3.1.0",
+            "productVersion": "6.3.1+3fcfb233a6b4ceee0f7f28dab41994d118e701d8",
+            "bytes": 182272,
+            "sha256": "0f837859814a3e13d79bc908ce0d5f86f82f89268b2ca2ac12376f69db2a4cad"
+          },
+          {
+            "name": "testhost.dll",
+            "fileVersion": "18.1200.26.56015",
+            "productVersion": "18.12.0",
+            "bytes": 49504,
+            "sha256": "3e9ac238400d8d72cba32776182060a5421c7630da7355360c46c0763df9043e"
+          }
+        ],
+        "packageVersions": {
+          "NUnit3TestAdapter": "6.3.1",
+          "MicrosoftTestPlatformTestHost": "18.12.0",
+          "MicrosoftTestPlatformObjectModel": "18.12.0",
+          "MicrosoftNETTestSdk": "18.12.0"
+        },
+        "packageCacheVersionPins": {
+          "NUnit3TestAdapter": "6.3.1",
+          "MicrosoftTestPlatformTestHost": "18.12.0",
+          "MicrosoftTestPlatformObjectModel": "18.12.0",
+          "MicrosoftNETTestSdk": "18.12.0"
+        },
+        "packageLocks": [
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Desktop/packages.lock.json",
+            "bytes": 9620,
+            "sha256": "72f9fa5284ebd35bc2337547b200289ccfad2910a2a431b131a81da262d5ef2a"
+          },
+          {
+            "path": "WorldAtlas/src/WorldAtlas.Observations/packages.lock.json",
+            "bytes": 94,
+            "sha256": "1e39b4149e1289978e01a366893a0697356e855bc7156b7c70747288030042f9"
+          },
+          {
+            "path": "WorldAtlas/tests/WorldAtlas.Tests/packages.lock.json",
+            "bytes": 13497,
+            "sha256": "81641df0637e3a8000da45ac7b08ed5c06b2cb9b636f804077ee950fab541ffc"
+          }
+        ],
+        "testAssembly": {
+          "path": "WorldAtlas.Tests/Release/net10.0/WorldAtlas.Tests.dll",
+          "fullName": "WorldAtlas.Tests, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+          "mvid": "20061699-6e7d-4c75-92c7-7aa3e3cd93cb",
+          "bytes": 68608,
+          "sha256": "0cbbf13c0fa1ede0f21173c309e14d04ad0a9f62188e7fcd6359f9d22b5b6f2a",
+          "identityMode": "captured-execution-output",
+          "pdb": {
+            "bytes": 22464,
+            "sha256": "d6f298b8affc9181b8e258c07a88c6b14e32f41dc861429e5497b4452d2f41ae",
+            "identityMode": "captured-execution-output"
+          }
+        }
+      },
+      "execution": {
+        "startedUtc": "2026-11-25T20:26:12.8589567Z",
+        "finishedUtc": "2026-11-25T20:26:17.6871752Z",
+        "trxStart": "2026-11-25T17:26:13.9597492-03:00",
+        "trxFinish": "2026-11-25T17:26:16.2190337-03:00",
+        "elapsedMilliseconds": 2379.0,
+        "exitCode": 0,
+        "summaryOutcome": "Completed",
+        "targetFramework": "net10.0",
+        "configuration": "Release",
+        "noBuild": true,
+        "noRestore": true,
+        "invocation": {
+          "executable": "<TOOLCHAIN>/dotnet.exe",
+          "workingDirectory": "<WORKTREE>",
+          "argv": [
+            "test",
+            "WorldAtlas\\WorldAtlas.sln",
+            "--configuration",
+            "Release",
+            "--no-build",
+            "--no-restore",
+            "--verbosity",
+            "minimal",
+            "--logger",
+            "trx;LogFileName=ATLAS-A-3e4ed67a-recapture.trx",
+            "--results-directory",
+            "<EVIDENCE>/controlled-recapture-20261125",
+            "--diag",
+            "<EVIDENCE>/controlled-recapture-20261125/vstest-diagnostics.log",
+            "-m:1",
+            "-p:MSBuildEnableWorkloadResolver=false",
+            "-p:DirectoryBuildPropsPath=<TEMP>/world-atlas-build/Directory.Build.props",
+            "-nodeReuse:false"
+          ],
+          "environment": {
+            "NUGET_PACKAGES": "<PACKAGE_CACHE>",
+            "DOTNET_ROOT": "<TOOLCHAIN>",
+            "DOTNET_MULTILEVEL_LOOKUP": "0",
+            "processPathLengthBefore": 26028,
+            "processPathLengthDuring": 26100
+          },
+          "buildHelper": {
+            "path": "<TEMP>/world-atlas-build/Directory.Build.props",
+            "bytes": 559,
+            "sha256": "f5ccf22070350b2d927df3f83c21d540a2e920a12769f332de0a42145355406c"
+          }
+        }
+      },
+      "discovery": {
+        "count": 29,
+        "cases": [
+          "RejectsUnknownVersionAndDuplicateJsonProperties",
+          "AxialNeighborsProjectAsAdjacentCellsAndHitTestingUsesStableIdentityOrder",
+          "ManualFileFallbackLoadsThroughTheValidatedReader",
+          "RejectsWrongSourceProfileAndUnknownCapabilities",
+          "ComparisonEntrySelectsItsCityAndChangingBoundaryRecomputesComparison",
+          "SignedAxialInt32ExtremesRecenterWithoutOverflowOrFabricatedCells",
+          "ScalePreferenceSupportsOnlyTheFourUserChoicesAndPersistsOutsideObservationFiles",
+          "RejectsDifferentRunWorldProducerScopeGapAndUnlinkedPredecessor",
+          "PointerAnchoredZoomPanBoundsAndFitRemainFinite",
+          "ReportsWheatChangeAsObservedDifferenceWithBothBoundaries",
+          "NavigationExposesWorldHexesLocationsAndAllCitiesInStableIdentityOrder",
+          "BundleAndProjectBoundaryOnlyIncludeAtlasOwnedProjects",
+          "MainLayoutKeepsComparisonAndToolbarVisibleAcrossSupportedScales",
+          "MainWindowAutomaticallyLoadsBundledDemoWithoutFilePicker",
+          "EmptyAndUnplacedHexesDoNotProducePolygons",
+          "InvalidFileLoadRetainsLastGoodObservation",
+          "ClickingVisibleComparisonRowSynchronizesCitySelection",
+          "RejectsInvalidUtf8BomPartialCoordinatesDanglingReferencesAndOversizedStrings",
+          "DistinguishesUnknownAbsentRowFromUncoveredAndNotApplicableValues",
+          "ClickingMapSelectsHexAndSynchronizesInspectorWhileCityListKeepsUnboundCityAccessible",
+          "ArrowKeysMoveSelectionBetweenVisibleHexesInScreenDirection",
+          "DesktopAndObservationAssembliesHaveNoCoreUnityOrNetworkReferences",
+          "MarkersUseStableOffsetsScopedToTheirAnchorHex",
+          "FitAndZoomButtonsKeepMapTransformInsideDeclaredLimits",
+          "LoadsBothDeterministicDemoFixturesAndTheirRawByteChain",
+          "BundledDemoProvidesHumanReadableChoicesAndObservedStockDelta",
+          "AboutWindowKeepsFixedBoundsWhenCloseButtonIsHoveredAtLargeScale",
+          "ValidationFixtureKeepsUnplacedHexAccessibleWithoutMapCoordinates",
+          "FixtureInterpretationIsDeterministicAndDoesNotTreatNullBindingAsAJoin"
+        ]
+      },
+      "capturedEvidence": {
+        "diagnostics": {
+          "file": "vstest-diagnostics.log",
+          "bytes": 163762,
+          "sha256": "606915d560190fee069ba8c0384c638dae140ac45a3e9a3cbfddc27798e0693b"
+        },
+        "console": {
+          "file": "test-console.txt",
+          "bytes": 810,
+          "sha256": "3534b28b7318ea5c608ea792ab7bcd04a752cb5acf77d3870ecc434340be4019"
+        }
+      },
+      "attempts": [
+        {
+          "label": "primary",
+          "nativeRunId": "e6f63b8b-9f2f-44cc-bff5-a11ee8666f4a",
+          "nativeRunLabel": "run-e6f63b8b-9f2f-44cc-bff5-a11ee8666f4a",
+          "originalReport": {
+            "bytes": 40431,
+            "sha256": "fa0e16f267c5a11656222ba530882741e3c0d5c10dac0618edaa879c4a9e2cf6"
+          },
+          "normalizedReport": {
+            "entry": "results/e6f63b8b9f2f44ccbff5a11ee8666f4a/atlas-a.trx",
+            "bytes": 34409,
+            "sha256": "a6830ae1bc7b181bf17dc6703c7d51d259af9833cac763472f39517de6483326",
+            "semanticSha256": "a6830ae1bc7b181bf17dc6703c7d51d259af9833cac763472f39517de6483326"
+          },
+          "summaryOutcome": "Completed",
+          "nativeCounters": {
+            "total": "29",
+            "executed": "29",
+            "passed": "29",
+            "failed": "0",
+            "error": "0",
+            "timeout": "0",
+            "aborted": "0",
+            "inconclusive": "0",
+            "passedButRunAborted": "0",
+            "notRunnable": "0",
+            "notExecuted": "0",
+            "disconnected": "0",
+            "warning": "0",
+            "completed": "0",
+            "inProgress": "0",
+            "pending": "0"
+          },
+          "caseOutcomeCounts": {
+            "Error": 0,
+            "Failed": 0,
+            "Timeout": 0,
+            "Aborted": 0,
+            "Inconclusive": 0,
+            "PassedButRunAborted": 0,
+            "NotRunnable": 0,
+            "NotExecuted": 0,
+            "Disconnected": 0,
+            "Warning": 0,
+            "Passed": 29,
+            "Completed": 0,
+            "InProgress": 0,
+            "Pending": 0
+          },
+          "resultCount": 29,
+          "gatePassed": true,
+          "exitCode": 0,
+          "elapsedMilliseconds": 2379.0,
+          "comparison": "source-projection-verified"
+        }
+      ],
+      "retention": {
+        "handle": "evidence-361cea43e26449aba52787657355af3f",
+        "ownerRole": "GeneralOrchestrator",
+        "policy": "DOTNET_TRX_EVIDENCE_CONTRACT.md",
+        "aclVerification": "verified-current-owner-only",
+        "retainedOutputCount": 249,
+        "retainedOutputBytes": 73712451
+      }
+    }
+  ]
+}
