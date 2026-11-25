@@ -2,6 +2,7 @@ bin/
 obj/
 artifacts/
 .tools/
+.validation-evidence/
 *.user
 *.suo
 !*.sln
