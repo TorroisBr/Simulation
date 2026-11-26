@@ -1141,7 +1141,8 @@ function Get-TrxOptionalMappedRelativePath {
 
 function Assert-DotNetTrxContextBinding {
     param([pscustomobject]$Private,[System.Collections.IDictionary]$PublicRun,[System.Collections.IDictionary]$PublicManifest,[System.Collections.Generic.Dictionary[string,byte[]]]$ArchivedEntries)
-    if([string]$PublicManifest.format.runProfile -ceq 'atlas-a-29-tests-v1'){return Assert-AtlasATrxContextBinding $Private $PublicRun $PublicManifest $ArchivedEntries}
+    $format=$PublicManifest.format
+    if($format -is [System.Collections.IDictionary] -and $format.Contains('runProfile') -and [string]$format['runProfile'] -ceq 'atlas-a-29-tests-v1'){return Assert-AtlasATrxContextBinding $Private $PublicRun $PublicManifest $ArchivedEntries}
     $runner=$Private.Runner;$context=$Private.Context
     Assert-TrxRuntimeSelectionEvidence $context $runner $PublicRun $Private.Root
     if([string]$PublicRun.runnerRunId -cne [string]$runner.runId -or [string]$PublicRun.originalManifest.sha256 -cne $Private.RunnerSha256 -or [long]$PublicRun.originalManifest.bytes -ne $Private.RunnerBytes.LongLength){throw 'Public package is not bound to the original private runner manifest.'}

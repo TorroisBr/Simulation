@@ -131,6 +131,14 @@ try {
     Assert-Throws { Write-DeterministicEvidenceArchive -Path (Join-Path $root 'traversal.zip') -Entries @([ordered]@{name='../escape.trx';bytes=$xmlBytes}) } 'ZIP traversal is rejected by writer'
     Assert-Throws { Write-DeterministicEvidenceArchive -Path (Join-Path $root 'duplicate.zip') -Entries @([ordered]@{name='results/run/cold.trx';bytes=$xmlBytes},[ordered]@{name='results/run/cold.trx';bytes=$xmlBytes}) } 'duplicate ZIP entry rejects'
 
+    $missingRunProfileManifest=[ordered]@{format=[ordered]@{reportProfile='trx-vstest-flat-v1'}}
+    $minimalPrivate=[pscustomobject]@{Context=[ordered]@{runtimeSelectionTraces=@()};Runner=[ordered]@{};Root=$root}
+    $emptyEntries=[Collections.Generic.Dictionary[string,byte[]]]::new([StringComparer]::Ordinal)
+    $contextBindingError=$null
+    try {
+        & $trxModule {param($privateContext,$manifest,$entries) Assert-DotNetTrxContextBinding $privateContext ([ordered]@{}) $manifest $entries} $minimalPrivate $missingRunProfileManifest $emptyEntries
+    } catch {$contextBindingError=$_.Exception.Message}
+    Assert-True ($contextBindingError -ceq 'Private context requires one runtime-selection trace for each cold/warm gate.') 'standard Core TRX profile without optional runProfile reaches its context validation path'
     $runnerId='a'*32;$runs=[System.Collections.Generic.List[object]]::new();$packageEntries=[System.Collections.Generic.List[object]]::new()
     foreach($label in @('cold','warm')){$source=Write-Trx "$label-source.trx" (New-TrxText -Outcomes @('Passed','Passed') -PrivateMetadata -DuplicateDisplayNames);$sourceFacts=Get-TrxFacts $source;$portable=ConvertTo-TrxCanonicalXml (ConvertTo-TrxProjectedDocument $sourceFacts.Document @('C:\agent\project'));$entryName="results/$runnerId/$label.trx";$packageEntries.Add([ordered]@{name=$entryName;bytes=$portable});$runs.Add([ordered]@{label=$label;nativeRunId=$sourceFacts.RunId;nativeRunLabel="run-$($sourceFacts.RunId)";originalReport=[ordered]@{bytes=1;sha256=('a'*64)};normalizedReport=[ordered]@{entry=$entryName;bytes=$portable.Length;sha256=(Get-BytesSha256 $portable);semanticSha256=(Get-TrxSemanticSha256 (ConvertTo-TrxProjectedDocument $sourceFacts.Document @('C:\agent\project')))};summaryOutcome=$sourceFacts.SummaryOutcome;nativeCounters=$sourceFacts.Counters;caseOutcomeCounts=$sourceFacts.OutcomeCounts;resultCount=$sourceFacts.ResultCount;gatePassed=$sourceFacts.GatePassed;exitCode=0;elapsedMilliseconds=100;comparison='source-projection-verified'})}
     $packageZip=Join-Path $root 'valid-package.zip';Write-DeterministicEvidenceArchive -Path $packageZip -Entries @($packageEntries.ToArray());$runtime=Assert-EvidenceRuntime
