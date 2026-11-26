@@ -46,7 +46,7 @@ The runner's exact input hashes for the changed source/tool inputs are preserved
 
 | Input | SHA-256 |
 |---|---|
-| `Tools/generate_daily_v1_captured_content_fixture.py` | `0d2b37d8cfda526dfE05ceaee4939ac28d91c8559d32ffb1fd453bf1ed64330b` |
+| `Tools/generate_daily_v1_captured_content_fixture.py` | `0d2b37d8cfda526dfe05ceaee4939ac28d91c8559d32ffb1fd453bf1ed64330b` |
 | `src/Simulation.Core/Simulation.Core.csproj` | `2d641912989de418d3d5c367f2b0d9e94a16674f91bce7259c4e75338354c306` |
 | `src/Simulation.Core/ReferenceContent/DailyV1LabSelectedReferenceInputs.cs` | `d1eff6ca188d505cc49522c17425f8119e28bd80e31d7869b4b97bd8fd533930` |
 | `tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj` | `eba4ee1eeefbcfde4fa350e8fa6eadf65b9aaed4211e4a03d6f2fa3d88d7520d` |
