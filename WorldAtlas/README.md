@@ -39,3 +39,5 @@ Comparison requires adjacent observation indices, increasing day and completed s
 ## Follow-on status
 
 ATLAS-B real artifact integration remains `WAIT_DEPENDENCY`. It requires this ATLAS-A shell and valid reviewed LAB-OBS-A observation files; this Demo-only release does not implement that producer or integration.
+
+The planned Inspector Entity Reference Navigation checkpoint is recorded in [the UX backlog](docs/UX_BACKLOG.md); it is not part of this release.
