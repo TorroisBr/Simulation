@@ -347,3 +347,9 @@ The six earlier packaging attempts below completed their 33-test application run
 | `atlas-vp-sharedviewport-final-20261126` | 33/33; controlled manifest/archive created, original comparison verified, and package integrity passed. |
 
 The final manifest also records two earlier raw reports and their dispositions: the 32-result `atlas-viewport-adapter.trx` was preliminary and uncontextualized (SHA-256 `c7c4cf76060b77a44f836f93732bdff25afd127b64b8e7b4c7737d3897854b5c`); the 33-result `atlas-viewport-adapter-final.trx` was retained as an uncontextualized run and replaced by the controlled capture (SHA-256 `ee8f0afe7c15b5e04679ef94b58f6ede9f8ab5ba1385e93c32b115f01445135b`). Neither was hidden or substituted for the final evidence.
+
+## Canonical promotion receipt — 2026-11-26
+
+The reviewed Shared Viewport application/evidence candidate `b4b074912f321c6187bb49b3fa0f872d30a2df72` (tree `f916971041702b79ef3f739980c2186623d58b58`) was promoted to `codex/atlas/standalone` by a fast-forward from `007af5799f9932e2a887cdb3edd64a9da1d674f4`. The push was non-forced. After promotion, the local branch, local remote-tracking ref, and GitHub remote ref all verified at `b4b074912f321c6187bb49b3fa0f872d30a2df72`. This receipt is a documentation-only successor; application and test inputs remain unchanged, and no tests were rerun.
+
+This promotion covers the accepted World Atlas consumer integration and its permanent 33-test evidence package. It does not claim that Dungeon Viewer has adopted or accepted the shared viewport library; that second-consumer acceptance remains open. ATLAS-B remains `WAIT_DEPENDENCY` on reviewed LAB-OBS-A production observations. No Core runtime branch or implementation was merged into Atlas.
