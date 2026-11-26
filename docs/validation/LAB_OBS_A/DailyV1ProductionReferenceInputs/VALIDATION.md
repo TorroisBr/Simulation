@@ -35,7 +35,7 @@ These values are observations from the current captured proving profile, not a f
 - No Unity validation was required for this Core-only source/test/tool change: no Unity production, assembly-definition, test, or package input changed.
 - `git diff --check`: PASS.
 
-Private original reports and logs are retained unchanged under protected evidence run ID `6003a873f18646cf8f21bf082194bd91`; the raw reports and private manifest are not copied into this repository. Evidence-manifest SHA-256: `f7ed0d9366682f8977d5888916dbaee381c0f8119f01ef30c75606965f90dfb`.
+Private original reports and logs are retained unchanged under protected evidence run ID `6003a873f18646cf8f21bf082194bd91`; the raw reports and private manifest are not copied into this repository. Evidence-manifest SHA-256: `f7ed0d9366682f8977d5888916dbaeef381c0f8119f01ef30c75606965f90dfb`.
 
 | Artifact | Bytes | SHA-256 |
 |---|---:|---|
