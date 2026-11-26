@@ -251,3 +251,50 @@ Refreshed preflight found local canonical at `dba4a8c6ac85c4a7913a9a27b6e9d6ae0b
 No remote `codex/atlas/standalone` branch existed before publication. A normal push created it, and an immediate live-ref check verified `origin/codex/atlas/standalone` at `b6150fe20e00ca3332a4bda89c4ac4d5c85ca25f` (tree `c9aa948261e79ae9f9c398615d855e29c28f6819`). The push also confirmed current Core `935a958512042a8660d5bb183e959bb9bd430b35` and architecture `cb71a70fc503e926c3b3f39415b86f2fab896ba8`. The accepted application implementation remains `3e4ed67aecec74e857f6be080dea0e4f7cad5646` / tree `b0b572257a580570e8d1a36f7c0480ad937d2436`; the public 29/29 package remains the exact ZIP and manifest identified above.
 
 This post-promotion closure record changes documentation only. It supersedes historical `PENDING`, evidence-blocked and `NOT PROMOTED` wording without removing the historical decision trail. ATLAS-B remains `WAIT_DEPENDENCY` on reviewed LAB-OBS-A artifacts and its separate real-world conformance gate; no downstream implementation was started.
+
+## Shared viewport Atlas adoption candidate — 2026-11-25
+
+This is a separate consumer candidate on the accepted ATLAS-A baseline. It does not revise ATLAS-A's `ACCEPTED / PROMOTED` status above. The earlier shared UI architecture-evaluation request did not itself authorize extraction; the later explicit user mandate for the bounded viewport integration supplied the separate implementation mandate required by the reviewed shared UI handoff. This Atlas adoption does not close the two-consumer shared viewport checkpoint; Dungeon adoption remains independently gated.
+
+### Source and bounded adapter
+
+- Atlas canonical base: `007af5799f9932e2a887cdb3edd64a9da1d674f4`.
+- Implementation candidate: `c8e3c0a9b2a585544f6402cabeb969e5893c5019`, tree `d2f201b632007c5aaa6b8c264102cf47ee62d9e2`, branch `codex/atlas/shared-viewport-adapter`.
+- Shared source commit: `b0e6130f44b6be62f4b9f26ea2ece22b47eef4c8`; the integrated `SharedDesktopUi` subtree is exactly `8f7b204878c1235b1e0c049762daff537407c92b`.
+- The adapter delegates map-center projection and pointer-anchor recalculation through `Simulation.Ui.Viewport`. Axial long recentering, world geometry, hex vertices/radius, bounds, hit order, `Fit`, zoom/pan limits, visibility clamping, navigation, rendering and selection remain Atlas-owned. The equal-scale clamped case retains the previous pan recalculation order. No observation schema, reader, comparer, UI scale, or Demo fixture changed.
+- The solution and project references build the shared source from this checkout. Updated lockfiles record the project graph; the shared project remains package-free and has no Avalonia or application project dependency. The desktop still directly references only Observations, which in turn references the pure viewport library.
+
+### Validation and artifacts
+
+Validation used .NET SDK `10.0.404`. Raw TRX and console logs remain in private owner-only local retention; they are not checked into Git.
+
+| Gate | Result |
+| --- | --- |
+| Atlas locked solution restore after project-graph lock refresh | Passed |
+| Atlas locked `win-x64` restore | Passed |
+| Atlas Release suite | **33 passed, 0 failed, 0 skipped**; TRX SHA-256 `EE8F0AFE7C15B5E04679EF94B58F6EDE9F8AB5BA1385E93C32B115F01445135B` |
+| Shared viewport library locked restore and Release suite from the integrated subtree | **22 passed, 0 failed, 0 skipped**; TRX SHA-256 `DCD6C3F62F54EA55DCFC240B5686C03B45221232E19BCEA95C022EC1F54C85B0` |
+| Atlas Release solution build | Passed; 0 warnings, 0 errors |
+| Self-contained `win-x64` publish through the normal Desktop project graph | Passed; `Simulation.Ui.Viewport.dll` is present and referenced by the published `.deps.json`; both bundled Demo observations match their source bytes |
+| `git diff --check` | Passed |
+
+Commands (run from `WorldAtlas/`, except the shared-library commands run from `SharedDesktopUi/`):
+
+- `dotnet restore .\WorldAtlas.sln --force-evaluate --verbosity minimal` updated the project-reference lock entries; subsequent restores used `--locked-mode`.
+- `dotnet restore .\WorldAtlas.sln --locked-mode --verbosity minimal`
+- `dotnet restore .\src\WorldAtlas.Desktop\WorldAtlas.Desktop.csproj --runtime win-x64 --locked-mode --verbosity minimal`
+- `dotnet test .\WorldAtlas.sln --no-restore --configuration Release -m:1 -p:UseSharedCompilation=false --logger "trx;LogFileName=atlas-viewport-adapter-final.trx" --results-directory <private-evidence-results>`
+- `dotnet restore .\tests\Simulation.Ui.Viewport.Tests\Simulation.Ui.Viewport.Tests.csproj --locked-mode --verbosity minimal`
+- `dotnet test .\tests\Simulation.Ui.Viewport.Tests\Simulation.Ui.Viewport.Tests.csproj --configuration Release --no-restore -m:1 -p:UseSharedCompilation=false --logger "trx;LogFileName=shared-viewport-integration.trx" --results-directory <private-evidence-results>`
+- `dotnet build .\WorldAtlas.sln --configuration Release --no-restore -m:1 -p:UseSharedCompilation=false`
+- `dotnet publish .\src\WorldAtlas.Desktop\WorldAtlas.Desktop.csproj --configuration Release --runtime win-x64 --self-contained true --no-restore --output .\artifacts\shared-viewport\win-x64-final -m:1 -p:UseSharedCompilation=false`
+
+The existing public `atlas-a-29-tests-v1` package is unchanged: ZIP SHA-256 `7244c87bd9caf3f5c65a943e9c764cee0c53463f0af59ef4a8fdec6fdeeffe29`; manifest SHA-256 `2476945c5e459ee51af93b2ec68fe36878db87f07d6145d3bc1d8f9cc1ec5118`. The new 33-test and 22-test raw reports are not represented by a new normalized public evidence package, so this record is not a promotion evidence package.
+
+The user-facing executable is under ignored `WorldAtlas/artifacts/shared-viewport/win-x64-final/`. `WorldAtlas.Desktop.exe` is 162,816 bytes with SHA-256 `04A4396AFEFB2B770302EC32D3573F35AE59CBF989CE35B7C12F1D7B5F73A148`; the adjacent shared DLL is 9,216 bytes with SHA-256 `CB1E4AF249ABCBC63FCFB9436FF4D8D014E02924672B34736347CEC97B707542`. The complete 230-entry package is `WorldAtlas/artifacts/shared-viewport/WorldAtlas-SharedViewport-win-x64-acceptance.zip`, 75,478,389 bytes, SHA-256 `05A6AC500348F47259CB5BCAD79D5559BB5948942AE218EB3724BA32E7946A19`; it includes the executable, runtime dependencies, shared DLL, Demo fixtures and `NATIVE-ACCEPTANCE.txt`.
+
+### Review and acceptance boundary
+
+Independent exact-tip code review of `c8e3c0a9b2a585544f6402cabeb969e5893c5019` returned **VALIDATED_CANDIDATE** with no actionable findings. The reviewer verified the exact base and shared subtree, component arithmetic order, project/publish graph, boundary tests, 33/33 Atlas TRX, 22/22 shared-library TRX, build/publish result and owner-only evidence ACL. This section is a documentation-only successor bound to that reviewed implementation tip; no app or test inputs changed after validation.
+
+Native interaction acceptance of this new executable is **PENDING user test**. The earlier native acceptance applies to predecessor `3e4ed67aecec74e857f6be080dea0e4f7cad5646`; it is not reused as acceptance of the adapter. The ZIP contains the native checklist. No canonical promotion or push was attempted. Promotion remains gated on the user's native result and an approved durable evidence path for the new test run. No ATLAS-B, LAB-OBS-A, real-world discovery or Dungeon Viewer integration work was started.
