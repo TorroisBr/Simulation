@@ -302,3 +302,48 @@ Native interaction acceptance of this executable is **PASS**, confirmed by the u
 The 33/33 raw Atlas report remains preserved locally with SHA-256 `EE8F0AFE7C15B5E04679EF94B58F6EDE9F8AB5BA1385E93C32B115F01445135B`; the 22/22 shared viewport report remains preserved locally with SHA-256 `DCD6C3F62F54EA55DCFC240B5686C03B45221232E19BCEA95C022EC1F54C85B`. The existing public `atlas-a-29-tests-v1` package remains unchanged. The approved 29-test profile is pinned to predecessor `3e4ed67aecec74e857f6be080dea0e4f7cad5646` and cannot normalize this 33-test run; the generic TRX profile requires a captured execution context not present in the retained raw artifacts. Therefore, normalized-publication evidence and exact-source applicability remain open. No canonical promotion or push is claimed in this record.
 
 No ATLAS-B, LAB-OBS-A, real-world discovery or Dungeon Viewer integration work was started.
+
+## Shared Viewport final evidence closure — 2026-11-26
+
+This addendum supersedes the earlier statement above that normalized publication and exact-source applicability remained open. That statement was accurate before the controlled final capture; the earlier record remains intact as historical evidence.
+
+### Accepted application identity and native behavior
+
+- Accepted implementation: `c8e3c0a9b2a585544f6402cabeb969e5893c5019`.
+- Documentation successors: `dc8f3344...` and candidate `1a4821ee52db0dee6f0818a18ed9239925889f0c`.
+- Tested candidate tree: `b9af05eb7aab077c34dbc00b4e4126b2ebb025f4`, based on Atlas canonical `007af5799f9932e2a887cdb3edd64a9da1d674f4`.
+- `SharedDesktopUi/`, `WorldAtlas/src/`, and `WorldAtlas/tests/` are unchanged from the accepted implementation through the tested candidate. The evidence/documentation successor adds no application or test behavior.
+
+The user confirmed native functional acceptance **PASS** on 2026-11-26 for automatic Demo World loading, pointer-anchored zoom, panning, Hex selection, Inspector synchronization, keyboard navigation, Day 1 / Day 2 comparison (Wheat 20 → 25, observed delta +5), window resizing, UI scaling, and About behavior. No blocking UX issue was reported. Entity Reference Navigation remains planning-only in [`docs/UX_BACKLOG.md`](docs/UX_BACKLOG.md); no new UI functionality was implemented in this closure.
+
+### Controlled 33-test capture and public package
+
+The controlled application run ID is `35ac0cd9-c9d9-4d53-8f25-a0039546647e`. It ran against the tested candidate/tree above and completed with **33 executed, 33 passed, 0 failed**, exit code 0, and a passing gate. The manifest contains all 33 case identities and outcomes. The archive independently contains exactly 33 unique test IDs, 33 test definitions, 33 test entries, and 33 `Passed` outcomes.
+
+The retained original TRX is 48,043 bytes with SHA-256 `aee4f29e176a1e54f5d3c59905447a7cf72a05838209e587c13d805a7b5de7bf`. The controlled protected-source projection comparison is `protected-source-projection-verified`; the original remains in owner-only local evidence. The normalized TRX is 42,343 bytes with SHA-256 `0b34343a96892f137a5b3d928165f04025aa6d6e16b8558e798985cdf7c72f46`.
+
+The permanent package is [`atlas-shared-viewport-33-tests-v1.zip`](validation/atlas-shared-viewport-33-tests-v1.zip) with [`manifest`](validation/atlas-shared-viewport-33-tests-v1.manifest.json). The 6,080-byte ZIP SHA-256 is `815c85133314bd188914d51548b4179b4ba949790f28bfb3bb2605048c91e575`; it contains only the normalized TRX, no raw logs. The 69,986-byte manifest SHA-256 is `6e3f526f8995c8dc09d4a328b283650409c078be5dffd86e3485e15e8e4a5684`. Both recorded and actual archive size/hash match. The public manifest and report were checked for machine/user paths; none were found. The protected original comparison was verified separately and is not implied by archive-only verification.
+
+The manifest binds the application input to commit/tree `1a4821ee52db0dee6f0818a18ed9239925889f0c` / `b9af05eb7aab077c34dbc00b4e4126b2ebb025f4` and the evidence tool to commit/tree `157de1627e686bfaa626a171062a4a80b7acfec2` / `2ab4fe4f06fd946e16caaa839e681e48474ba372`. All seven tool-file SHA-256 values in the manifest match the reviewed tool checkout. The existing ATLAS-A 29-test package remains byte-for-byte unchanged: ZIP SHA-256 `7244c87bd9caf3f5c65a943e9c764cee0c53463f0af59ef4a8fdec6fdeeffe29`; manifest SHA-256 `2476945c5e459ee51af93b2ec68fe36878db87f07d6145d3bc1d8f9cc1ec5118`.
+
+### Tool regression applicability and ownership
+
+The generic TRX regression is applicable because the reviewed tool change adds a strict retained-output provenance case to the shared `TrxValidationEvidence.psm1` validator. The earlier run on PowerShell 7.6.9 stopped at the pinned-runtime guard and did not count as a pass; no guard or version pin was changed. The existing approved PowerShell Core 7.6.5 runtime was then used with .NET 10.0.11 and compression assembly 10.0.0.0. `Tools/UnityValidation/tests/TrxValidationEvidenceTests.ps1` passed **154 assertions**. The previously reported Atlas-profile suite and ATLAS-A 18/18 regression remain associated with the exact tool tip; no application tests were rerun for this documentation/package update.
+
+Independent review of tool candidate `157de1627e686bfaa626a171062a4a80b7acfec2` against Core canonical `08f6700edbcb6977ab49f353555ca16693024845` returned **VALIDATED_CANDIDATE**, with no actionable findings. The reviewer initially recorded the generic suite as unverified because the active shell exposed PowerShell 7.6.9; the pinned-runtime run above resolves that specific evidence gap without changing tool source or weakening the test. The tool remains separately owned by Core. This Atlas record preserves its exact reviewed identity and does not claim to promote or merge a Core-owned Tools branch; any Core integration is coordinated with the Simulation Orchestrator.
+
+### Evidence-attempt dispositions
+
+The six earlier packaging attempts below completed their 33-test application run but failed a capture or packaging gate; none is represented as a passed evidence package. Their protected diagnostics and all seven historical Atlas cache roots remain preserved. The successful controlled capture is listed last.
+
+| Attempt label | Disposition |
+| --- | --- |
+| `atlas-vp-closure-20261126` | 33/33 application tests; input inventory comparison failed after tests created UI settings files. |
+| `atlas-vp-closure-final-20261126` | 33/33; packaging stopped because a runtime log was created after the input inventory snapshot. |
+| `atlas-vp-stack-21fd6249` | 33/33; diagnostic repeat reproduced the runtime-log inventory ordering failure. |
+| `atlas-vp-accepted-20261126` | 33/33; locale-dependent timestamp parsing rejected the package. |
+| `atlas-vp-finalrun-20261126` | 33/33; the SHA helper rejected zero-byte .NET sentinel files. |
+| `atlas-vp-final-accepted-20261126` | 33/33; the private-runner schema check rejected injected byte-count/SHA metadata. |
+| `atlas-vp-sharedviewport-final-20261126` | 33/33; controlled manifest/archive created, original comparison verified, and package integrity passed. |
+
+The final manifest also records two earlier raw reports and their dispositions: the 32-result `atlas-viewport-adapter.trx` was preliminary and uncontextualized (SHA-256 `c7c4cf76060b77a44f836f93732bdff25afd127b64b8e7b4c7737d3897854b5c`); the 33-result `atlas-viewport-adapter-final.trx` was retained as an uncontextualized run and replaced by the controlled capture (SHA-256 `ee8f0afe7c15b5e04679ef94b58f6ede9f8ab5ba1385e93c32b115f01445135b`). Neither was hidden or substituted for the final evidence.
