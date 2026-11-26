@@ -55,12 +55,19 @@ public sealed class NavigationAndBoundaryTests
         var testDirectory = TestContext.CurrentContext.TestDirectory;
         var desktopProject = XDocument.Load(Path.Combine(testDirectory, "boundary", "WorldAtlas.Desktop.csproj"));
         var observationsProject = XDocument.Load(Path.Combine(testDirectory, "boundary", "WorldAtlas.Observations.csproj"));
+        var viewportProject = XDocument.Load(Path.Combine(testDirectory, "boundary", "Simulation.Ui.Viewport.csproj"));
         var references = desktopProject.Descendants("ProjectReference").Select(element => (string?)element.Attribute("Include")).ToArray();
+        var observationReferences = observationsProject.Descendants("ProjectReference")
+            .Select(element => (string?)element.Attribute("Include")).ToArray();
 
         Assert.That(references, Has.Length.EqualTo(1));
         Assert.That(references[0], Does.Contain("WorldAtlas.Observations"));
         Assert.That(references.Any(reference => reference!.Contains("Simulation", StringComparison.OrdinalIgnoreCase) ||
                                                reference.Contains("Unity", StringComparison.OrdinalIgnoreCase)), Is.False);
+        Assert.That(observationReferences, Has.Length.EqualTo(1));
+        Assert.That(observationReferences[0], Does.Contain("Simulation.Ui.Viewport"));
         Assert.That(observationsProject.Descendants("PackageReference"), Is.Empty);
+        Assert.That(viewportProject.Descendants("PackageReference"), Is.Empty);
+        Assert.That(viewportProject.Descendants("ProjectReference"), Is.Empty);
     }
 }

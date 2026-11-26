@@ -79,6 +79,62 @@ public sealed class HexProjectionTests
     }
 
     [Test]
+    public void ProjectionCentersMatchAcceptedLegacyFixturesExactly()
+    {
+        var projection = new HexProjection([
+            new HexFact("a", -2, 1, "plain", "1"),
+            new HexFact("b", 3, -4, "hill", "1"),
+            new HexFact("c", 0, 2, "forest", "1")
+        ]);
+
+        var cells = projection.Project(new MapSize(777.25d, 433.5d), 0.75d, new MapPoint(13.125d, -8.75d));
+
+        Assert.That(cells.Select(cell => cell.Center), Is.EqualTo(new[]
+        {
+            new MapPoint(308.2192563912806d, 262d),
+            new MapPoint(464.1038290724796d, -8d),
+            new MapPoint(464.1038290724796d, 316d)
+        }));
+    }
+
+    [Test]
+    public void PointerAnchoredZoomMatchesAcceptedLegacyPanExactly()
+    {
+        var pan = HexProjection.ZoomAt(new MapPoint(42d, -18d), 1.25d, 2.5d,
+            new MapPoint(204d, 171d), new MapSize(700d, 460d));
+
+        Assert.That(pan, Is.EqualTo(new MapPoint(230d, 23d)));
+    }
+
+    [Test]
+    public void ClampedEqualScaleZoomStillRecalculatesPanLikeTheAcceptedBaseline()
+    {
+        var pan = HexProjection.ZoomAt(new MapPoint(200.0005d, -31.7d), HexProjection.MinimumZoom, 0d,
+            new MapPoint(89d / 3d, 71.2d), new MapSize(500d, 400d));
+
+        Assert.That(pan, Is.EqualTo(new MapPoint(200.00050000000002d, -31.700000000000003d)));
+    }
+
+    [Test]
+    public void SignedAxialInt32ExtremeCentersMatchAcceptedLegacyFixturesExactly()
+    {
+        var projection = new HexProjection([
+            new HexFact("far-a", int.MinValue, int.MaxValue, "plain", "1"),
+            new HexFact("far-b", int.MaxValue, int.MinValue, "hill", "1")
+        ]);
+
+        var cells = projection.Project(new MapSize(900d, 560d), 1e-9d, new MapPoint(0d, 0d));
+
+        Assert.That(cells.Select(cell => cell.Center), Is.EqualTo(new[]
+        {
+            new MapPoint(360.7307810762062d, 434.618822584d),
+            new MapPoint(539.2692187990862d, 125.38117734399998d)
+        }));
+        Assert.That(projection.HitTest(new MapSize(900d, 560d), 1e-9d, new MapPoint(0d, 0d), cells[0].Center),
+            Is.EqualTo("far-a"));
+    }
+
+    [Test]
     public void EmptyAndUnplacedHexesDoNotProducePolygons()
     {
         var projection = new HexProjection([new HexFact("legacy", null, null, null, null)]);

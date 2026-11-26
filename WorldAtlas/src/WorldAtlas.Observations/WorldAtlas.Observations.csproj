@@ -4,4 +4,7 @@
     <RootNamespace>WorldAtlas.Observations</RootNamespace>
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\SharedDesktopUi\src\Simulation.Ui.Viewport\Simulation.Ui.Viewport.csproj" />
+  </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using Simulation.Ui.Viewport;
 using WorldAtlas.Observations.Models;
 
 namespace WorldAtlas.Observations.Geometry;
@@ -69,7 +70,7 @@ public sealed class HexProjection
         }
 
         var scale = ClampZoom(zoom);
-        var center = new MapPoint(viewport.Width / 2d + pan.X, viewport.Height / 2d + pan.Y);
+        var transform = CreateViewportTransform(viewport, pan, scale);
         var builder = ImmutableArray.CreateBuilder<ProjectedHex>(_hexes.Length);
         foreach (var hex in _hexes)
         {
@@ -77,7 +78,12 @@ public sealed class HexProjection
             var axialR = (long)hex.R!.Value - _originR;
             var worldX = HexSize * Math.Sqrt(3d) * (axialX + axialR / 2d);
             var worldY = HexSize * 1.5d * axialR;
-            var cellCenter = center + new MapPoint(worldX * scale, worldY * scale);
+            if (!transform.TryProject(new ViewportPoint(worldX, worldY), out var projectedCenter))
+            {
+                return ImmutableArray<ProjectedHex>.Empty;
+            }
+
+            var cellCenter = new MapPoint(projectedCenter.X, projectedCenter.Y);
             var radius = HexSize * scale;
             var vertices = ImmutableArray.CreateBuilder<MapPoint>(6);
             for (var vertex = 0; vertex < 6; vertex++)
@@ -161,10 +167,13 @@ public sealed class HexProjection
             return pan;
         }
 
-        var center = new MapPoint(viewport.Width / 2d, viewport.Height / 2d);
-        var worldAnchor = new MapPoint((pointer.X - center.X - pan.X) / oldZoom, (pointer.Y - center.Y - pan.Y) / oldZoom);
-        return new MapPoint(pointer.X - center.X - worldAnchor.X * newZoom,
-            pointer.Y - center.Y - worldAnchor.Y * newZoom);
+        var transform = CreateViewportTransform(viewport, pan, oldZoom);
+        if (!transform.TryReanchor(newZoom, new ViewportPoint(pointer.X, pointer.Y), out var reanchored))
+        {
+            return pan;
+        }
+
+        return new MapPoint(reanchored.Pan.X, reanchored.Pan.Y);
     }
 
     public static MapPoint ClampPan(MapPoint pan, MapRect contentAtOrigin, MapSize viewport,
@@ -205,6 +214,13 @@ public sealed class HexProjection
 
         return inside;
     }
+
+    private static ViewportTransform CreateViewportTransform(MapSize viewport, MapPoint pan, double scale) =>
+        new(new ViewportPoint(0d, 0d),
+            new ViewportPoint(viewport.Width / 2d, viewport.Height / 2d),
+            new ViewportPoint(pan.X, pan.Y),
+            scale,
+            ViewportYDirection.Down);
 
     private static double DistanceToSegment(MapPoint point, MapPoint start, MapPoint end)
     {
