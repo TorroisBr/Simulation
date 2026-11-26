@@ -55,3 +55,25 @@ The runner's exact input hashes for the changed source/tool inputs are preserved
 ## Boundary and remaining work
 
 This checkpoint provides the production-owned fixed reference input provider and proves its captured-definition identity plus real two-day Core stock behavior. It does not establish an official Lab adapter, observation API, writer isolation, concurrent read boundary, or user-facing Lab command. Those remain LAB-OBS-A prerequisites; no Core canonical promotion or architecture canonical change is included here.
+
+## Evidence packaging recapture and closure (2026-11-26)
+
+The protected original run `6003a873f18646cf8f21bf082194bd91` and its original reports remain unchanged. The approved packager declined that run because its captured untracked-directory status path ended with a slash (`?? src/Simulation.Core/ReferenceContent/`), which the path normalizer treats as an empty component. No source or report was rewritten. To satisfy the source-context contract, the official CoreValidation runner was run once more on the clean, committed candidate source; the recapture is the authoritative packaged execution for this checkpoint.
+
+The recapture is run `9300a513be1a4ebea53b5917881e2a2b`, with the exact validated Core source commit `b9b049d3f52c22ba40ff87896a12474a5d2c85c6` and tree `569cb5f0fea9455ee341bb87e5e49a0945f450b4`. Its stable input inventory contains 566 source inputs and 3 generated dependencies, digest `0075209ab9b433ec2073258a098c23c939bd342f57b67ad894774e31f0699fa5`; the runner recorded no worktree changes, and `Library` was absent. The pinned official CoreValidation run passed cold and warm at **1,214/1,214** each, with all failures, errors, skips, timeouts, aborts, and not-executed results at zero. The two native reports are retained privately and remain byte-identical to their captured identities:
+
+| Original report | Bytes | SHA-256 |
+|---|---:|---|
+| `CoreTests-cold.trx` | 1,753,398 | `288c44e35d2a7a4261f60fd00a0d9e7a2fa7ba88daab8dc0c8d1a639e589408d` |
+| `CoreTests-warm.trx` | 1,753,398 | `a4051f4beb1cb82f3ad7e72ae177547fae08d73552280f385a242435704e541e` |
+
+The clean recapture then exposed a separate official adapter defect: standard Core package manifests do not declare optional `format.runProfile`, but source-context verification accessed it unconditionally. The minimal correction in tool commit `a71b32abe2fad8b2895c95c18ad37e58810b0030` guards that optional field; a regression exercises standard-profile dispatch when it is absent. This tooling-only correction does not change Simulation Core production code or its C# test inputs. The focused evidence-tool suites passed: TRX adapter **154 assertions** and package-tool **69 assertions**.
+
+The official packager produced bundle `lab-obs-a-daily-v1-core-9300a513be1a4ebea53b5917881e2a2b`. Its normalized cold and warm reports each contain 1,214 individually passing test cases and preserve their native run identities, test identities, names, results, and counters. The normalized reports are 1,515,191 bytes each with semantic hashes `3d5783f456423352339c09c1c294bf7c19fa8ce18df2dbb2204ad44dfac7cbf1` (cold) and `948e46a74db67c5066c0c2fdcb6b2a3eaa6c424e4eb4f10af4a444292e46c967` (warm). Both source-context/original-comparison verification and archive-only verification passed. The independently rebuilt deterministic archive matched its recorded hash.
+
+| Published artifact | Bytes | SHA-256 |
+|---|---:|---|
+| `evidence/lab-obs-a-daily-v1-core-9300a513be1a4ebea53b5917881e2a2b.zip` | 580,993 | `fe0f9e1a72145f117bdad186c95808f24e9703f2348393d9933e9608f77ebc8e` |
+| `evidence/lab-obs-a-daily-v1-core-9300a513be1a4ebea53b5917881e2a2b.manifest.json` | 260,901 | `e147be2bdb46a8f95fe31db954762d686c6346fde1fcf0158be0d8f46c051768` |
+
+The independent package review passed. It matched all 2,428 cold/warm case identities, definitions, names, outcomes, and counters to the original reports, confirmed deterministic archive reproduction and public privacy checks, and verified that the package binds to tool commit `a71b32a` and source commit/tree `b9b049d` / `569cb5f`. The package contains normalized reports and public manifest only; original TRX, logs, runner manifest, source context, traces, and recovered outputs remain in owner-protected E: storage. No Unity validation was needed because no Unity production, assembly-definition, test, or package input changed.
