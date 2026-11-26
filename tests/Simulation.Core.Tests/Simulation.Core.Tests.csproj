@@ -101,6 +101,7 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs" Link="Economy/FiniteSourceScenarioRuntimeTests.cs" />
     <Compile Include="DailyV1MixedSourceProfileAdmissionTests.cs" Link="Economy/DailyV1MixedSourceProfileAdmissionTests.cs" />
       <Compile Include="DailyV1DefinitionIdentityTests.cs" Link="Definitions/DailyV1DefinitionIdentityTests.cs" />
+      <Compile Include="DailyV1ProductionReferenceInputsTests.cs" Link="Definitions/DailyV1ProductionReferenceInputsTests.cs" />
       <Compile Include="DailyV1ContentProjectionTests.cs" Link="Definitions/DailyV1ContentProjectionTests.cs" />
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/DailyV1CapturedSelectedContentFixture.cs" Link="Definitions/DailyV1CapturedSelectedContentFixture.cs" />
       <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/CoreFHostNeutralBehaviorFingerprint.cs" Link="Definitions/CoreFHostNeutralBehaviorFingerprint.cs" />

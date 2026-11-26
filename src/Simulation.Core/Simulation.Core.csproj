@@ -10,6 +10,7 @@
     <CheckForOverflowUnderflow>false</CheckForOverflowUnderflow>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="ReferenceContent/DailyV1LabSelectedReferenceInputs.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/IAuthoritativeMutationStatus.cs" Link="IAuthoritativeMutationStatus.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/ActionExecution.cs" Link="ActionExecution.cs" />
     <Compile Include="../../Packages/com.simulation.core/Runtime/DomainEvents.cs" Link="DomainEvents.cs" />
