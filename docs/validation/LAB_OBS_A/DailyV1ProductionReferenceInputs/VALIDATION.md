@@ -4,7 +4,7 @@
 
 This candidate adds the generated, internal Core-owned `DailyV1LabSelectedReferenceInputs` provider for the accepted fixed Daily-v1 proving profile and verifies its identity against the existing frozen Unity capture. It does not add an observation reader, `AdvanceAndObserve`, Lab CLI behavior, persistence, Atlas, P13, CORE-X, or new architecture authority. LAB-OBS-A remains `WAIT_DEPENDENCY` until its official Lab adapter and coherent observation boundary are delivered under their separate contract.
 
-The production provider is compiled only by `Simulation.Core.csproj`. The existing frozen fixture remains in the Unity EditMode assembly and is not referenced by production Core code or by the Core test project at runtime. The generator's default target remains the existing fixture; the `core-reference` target emits the internal Core provider.
+The production provider is compiled only by `Simulation.Core.csproj`. The frozen fixture source remains at its canonical Unity EditMode test path and is linked into the Core test assembly solely as the parity oracle. Production Core code does not reference or compile that fixture. The generator's default target remains the existing fixture; the `core-reference` target emits the internal Core provider.
 
 ## Deterministic generation and parity
 
