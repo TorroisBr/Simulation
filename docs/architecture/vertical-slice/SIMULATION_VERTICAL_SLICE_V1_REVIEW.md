@@ -1,0 +1,13 @@
+# Simulation Vertical Slice v1 · Independent architecture review
+
+**PASS — REVIEWED IMPLEMENTATION ROADMAP.** Independent reviewer `vertical_slice_review` reviewed the entire substantive diff at `c5dc3f67579222103128400d184fea2b41e3fba2`, tree `dfa3fb9f3b9c01af30f15b2be8ff65e6fbb6ec59`, against architecture canonical `cb71a70fc503e926c3b3f39415b86f2fab896ba8`. Local and remote architecture matched. The reviewer checked source and ref evidence for Core, Lab, Atlas, Dungeon and Shared Viewport, internal links, ancestry and `git diff --check`. This is independent architecture review of a documentation candidate. No executable tests were performed.
+
+The review confirms the proposed local Lab child preserves Core authority, the accepted net8.0 entry identity, Day 1 first-cut admission, single-threaded lifecycle and one in-flight daily step. Pausing drains the admitted step. An ambiguous or failed result terminates the run with only its last proven cut. The same Core reader, Lab v1 serialization and reviewed Atlas byte parser support live and offline modes. The plan treats Microsoft's end of .NET 8 servicing as a distribution constraint, with a separate supported host qualification and no expansion of P12.
+
+The Day 1/2 stock probe is already promoted. The facade is still a candidate. Neither the roadmap nor the probe promote a producer or an Atlas real reader. No new implementation can be dispatched on the strength of this review alone. Continue existing facade and ATLAS-C mandates. The City foundation and interactive host are ready for bounded technical design. The City/Atlas document paths keep independent domain authority and require a later review before implementation. The first slice needs no Simulation binding for the standalone documents. Crypt v1 retains separate native acceptance and a compatible existing Dungeon is enough for the integrated viewer milestone.
+
+Nonblocking validation precision. For byte equality, compare file and live encoding from the exact same detached cut and fixed run metadata. For real independent executions, compare semantic facts and provenance rules, with distinct WorldId/runId values. Hold the source and transport bytes fixed only for the former check.
+
+The reviewer confirmed applicability to a direct successor that adds only this accurate record and leaves all three substantive blobs and the applicable baselines unchanged.
+
+[Roadmap and evidence](SIMULATION_VERTICAL_SLICE_V1.md) · [Live session contract](VERTICAL_SLICE_V1_LIVE_SESSION.md) · [City scope](VERTICAL_SLICE_V1_CITY_FOUNDATION.md)
