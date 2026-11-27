@@ -666,14 +666,41 @@ function Assert-TrxRunnerInputInventory {
     Push-Location -LiteralPath $matchingRoot
     try{Import-Module $coreModule -Force -Scope Local;$liveInputs=@(Get-CoreInputSnapshot -ProjectRoot (Get-Location).Path);$liveDigest=Get-CoreInputDigest -Snapshot $liveInputs}finally{Pop-Location}
     if((ConvertTo-Json -InputObject @($liveInputs) -Depth 6 -Compress) -cne (ConvertTo-Json -InputObject @($Runner.inputs.files) -Depth 6 -Compress) -or $liveDigest -cne [string]$Runner.inputs.digest -or [string]$Runner.source.workingTreeInputDigest -cne $liveDigest){throw 'The complete current CORE source/input inventory differs from the captured runner identity.'}
-    $scriptText=[IO.File]::ReadAllText($coreScript,[Text.UTF8Encoding]::new($false,$true))
-    $assetsMatch=[regex]::Match($scriptText,'(?s)\$projectAssets\s*=\s*@\((?<body>.*?)\)')
-    if(-not $assetsMatch.Success){throw 'The hash-bound CORE runner lacks its generated-dependency path declaration.'}
-    $expectedAssets=@([regex]::Matches($assetsMatch.Groups['body'].Value,"'([^']+)'")|ForEach-Object {$_.Groups[1].Value})
+    $expectedAssets=@(Get-TrxDeclaredGeneratedDependencyPaths $Runner $coreScript)
     $actualAssets=@($Runner.inputs.generatedDependencies|ForEach-Object {[string]$_.path})
     [Array]::Sort($expectedAssets,[StringComparer]::Ordinal);[Array]::Sort($actualAssets,[StringComparer]::Ordinal)
     if(($expectedAssets -join "`n") -cne ($actualAssets -join "`n")){throw 'Captured generated-dependency inventory does not cover the hash-bound runner declared set.'}
     return $matchingRoot
+}
+
+function Get-TrxDeclaredGeneratedDependencyPaths {
+    param([System.Collections.IDictionary]$Runner,[string]$RunnerScriptPath)
+    $scriptText=[IO.File]::ReadAllText($RunnerScriptPath,[Text.UTF8Encoding]::new($false,$true))
+    $assetsMatch=[regex]::Match($scriptText,'(?s)\$projectAssets\s*=\s*@\((?<body>.*?)\)')
+    if(-not $assetsMatch.Success){throw 'The hash-bound CORE runner lacks its generated-dependency path declaration.'}
+    $expectedBase=@('src/Simulation.Core/obj/project.assets.json','tests/Simulation.Core.Tests/obj/project.assets.json','tools/Simulation.Core.CalendarDemo/obj/project.assets.json')
+    $declaredBase=@([regex]::Matches($assetsMatch.Groups['body'].Value,"'([^']+)'")|ForEach-Object {$_.Groups[1].Value.Replace('\','/')})
+    [Array]::Sort($expectedBase,[StringComparer]::Ordinal);[Array]::Sort($declaredBase,[StringComparer]::Ordinal)
+    if(($expectedBase -join "`n") -cne ($declaredBase -join "`n")){throw 'Hash-bound runner Core/test/demo generated-dependency declaration is unsupported.'}
+    $allAppends=@([regex]::Matches($scriptText,'\$projectAssets\s*\+=\s*''([^'']+)'''))
+    if($allAppends.Count -gt 1 -or ($allAppends.Count -eq 1 -and $allAppends[0].Groups[1].Value -cne 'tools/Simulation.Lab/obj/project.assets.json')){throw 'Hash-bound runner generated-dependency append is unsupported.'}
+    $labGateNames=@('labBuild','labCold','labWarm')
+    $gateInventory=$null;if($Runner.Contains('gates')){$gateInventory=$Runner['gates']}
+    $presentLabGates=@($labGateNames|Where-Object {$gateInventory -is [System.Collections.IDictionary] -and $gateInventory.Contains($_)})
+    if($presentLabGates.Count -notin @(0,3)){throw 'Hash-bound runner contains an incomplete Core+Lab gate profile.'}
+    $paths=[Collections.Generic.List[string]]::new();foreach($path in $expectedBase){$paths.Add($path)}
+    if($presentLabGates.Count -eq 3){
+        $null=Assert-TrxCompleteCoreLabRunnerManifest $Runner
+        $expectedGateKeys=@('coldBuild','coldTests','warmTests','coldDemo','warmDemo','labBuild','labCold','labWarm');$actualGateKeys=@($gateInventory.Keys);[Array]::Sort($expectedGateKeys,[StringComparer]::Ordinal);[Array]::Sort($actualGateKeys,[StringComparer]::Ordinal)
+        if(($expectedGateKeys -join "`n") -cne ($actualGateKeys -join "`n")){throw 'Core+Lab runner gate inventory is not exact.'}
+        $labProject='tools/Simulation.Lab/Simulation.Lab.csproj';$labAsset='tools/Simulation.Lab/obj/project.assets.json'
+        $normalized=([regex]::Replace($scriptText,'\s+',' ')).Replace('\','/')
+        if(-not $normalized.Contains("`$labProject = '$labProject'") -or -not $normalized.Contains("Invoke-Dotnet -Name 'restore-lab-locked' -Arguments @('restore', `$labProject, '--locked-mode')") -or -not $normalized.Contains("Invoke-Dotnet -Name 'lab-build' -Arguments @('build', `$labProject, '--no-restore', '--configuration', 'Release')") -or -not $normalized.Contains("Invoke-Dotnet -Name 'lab-cold' -Arguments @('run', '--project', `$labProject, '--no-build', '--no-restore', '--configuration', 'Release')") -or -not $normalized.Contains("Invoke-Dotnet -Name 'lab-warm' -Arguments @('run', '--project', `$labProject, '--no-build', '--no-restore', '--configuration', 'Release')")){throw 'Hash-bound runner Lab locked-restore/build/cold/warm commands differ from the closed Core+Lab contract.'}
+        if(-not [regex]::IsMatch($scriptText,"(?s)if\s*\(\s*-not\s+\`$SkipLab\s*\)\s*\{\s*\`$projectAssets\s*\+=\s*'tools/Simulation\.Lab/obj/project\.assets\.json'\s*\}") -or -not [regex]::IsMatch($scriptText,"(?s)if\s*\(\s*-not\s+\`$SkipLab\s*\)\s*\{\s*\`$inputProjects\s*\+=\s*'tools/Simulation\.Lab/Simulation\.Lab\.csproj'\s*\}")){throw 'Hash-bound runner Lab project and generated dependency declarations are not scoped to the Lab-enabled run.'}
+        if($allAppends.Count -ne 1){throw 'Core+Lab runner does not declare exactly one Lab generated dependency append.'}
+        $paths.Add($labAsset)
+    }
+    return @($paths.ToArray())
 }
 
 function Assert-TrxRunSettingsEvidence {
@@ -817,13 +844,13 @@ function Assert-TrxRestoreProjectAssetPaths {
         'tests/Simulation.Core.Tests/obj/project.assets.json'=$testProject
         'tools/Simulation.Core.CalendarDemo/obj/project.assets.json'=$demoProject
     }
-    $scriptText=[IO.File]::ReadAllText($RunnerScriptPath,[Text.UTF8Encoding]::new($false,$true));$assetsMatch=[regex]::Match($scriptText,'(?s)\$projectAssets\s*=\s*@\((?<body>.*?)\)')
-    if(-not $assetsMatch.Success){throw 'Hash-bound runner lacks its generated project.assets.json declaration.'}
-    $declared=@([regex]::Matches($assetsMatch.Groups['body'].Value,"'([^']+)'" )|ForEach-Object {$_.Groups[1].Value.Replace('\\','/')})
+    $declared=@(Get-TrxDeclaredGeneratedDependencyPaths $Runner $RunnerScriptPath)
+    $labAsset='tools/Simulation.Lab/obj/project.assets.json';$labProject='tools/Simulation.Lab/Simulation.Lab.csproj'
+    if($declared -ccontains $labAsset){$expected[$labAsset]=$labProject}
     $expectedPaths=@($expected.Keys);[Array]::Sort($declared,[StringComparer]::Ordinal);[Array]::Sort($expectedPaths,[StringComparer]::Ordinal)
-    if(($declared -join "`n") -cne ($expectedPaths -join "`n")){throw 'Runner generated dependency declaration does not match the Core, test, and demo project asset set.'}
+    if(($declared -join "`n") -cne ($expectedPaths -join "`n")){throw 'Runner generated dependency declaration does not match the exact Core, test, demo, and profile-specific Lab asset set.'}
     $assets=@($Runner.inputs.generatedDependencies)
-    if($assets.Count -ne $expected.Count){throw 'Generated dependency inventory does not contain exactly all three restored Core/test/demo project asset files.'}
+    if($assets.Count -ne $expected.Count){throw 'Generated dependency inventory does not contain exactly the restored project asset files for its closed runner profile.'}
     foreach($record in $assets){$relative=[string]$record.path;if(-not $expected.ContainsKey($relative)){throw "Unexpected generated project assets file '$relative'."};$full=Resolve-TrxWorktreeFile $relative @($SourceRoot);$document=([IO.File]::ReadAllText($full,[Text.UTF8Encoding]::new($false,$true))|ConvertFrom-Json -AsHashtable -Depth 100);$restore=$document.project.restore;if($null -eq $restore -or [string]::IsNullOrWhiteSpace([string]$restore.projectPath)){throw "Generated project assets '$relative' lacks project.restore.projectPath."};$actualProject=[IO.Path]::GetFullPath([string]$restore.projectPath);$wantedProject=[IO.Path]::GetFullPath((Join-Path $SourceRoot ($expected[$relative].Replace('/',[IO.Path]::DirectorySeparatorChar))));if(-not [string]::Equals($actualProject,$wantedProject,[StringComparison]::OrdinalIgnoreCase)){throw "Generated project assets '$relative' restore.projectPath does not bind to the validated source worktree project."}}
 }
 

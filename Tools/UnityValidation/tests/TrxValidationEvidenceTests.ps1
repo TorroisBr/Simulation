@@ -350,6 +350,34 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     $coreLabPassing=ConvertFrom-Json (ConvertTo-Json $coreLabRunner -Depth 10 -Compress) -AsHashtable;$coreLabPassing.status='Passed';foreach($gate in $coreLabPassing.gates.Values){$gate.exitCode=0}
     & $trxModule {param($r) Assert-TrxCompleteCoreLabRunnerManifest $r} $coreLabPassing
     Assert-True $true 'Core+Lab profile accepts a complete passing cold/warm run'
+    $labProjectRelative='tools/Simulation.Lab/Simulation.Lab.csproj';$labAssetRelative='tools/Simulation.Lab/obj/project.assets.json';$labProjectPath=Join-Path $assetRoot $labProjectRelative;$labAssetPath=Join-Path $assetRoot $labAssetRelative
+    New-Item -ItemType Directory -Force -Path (Split-Path -Parent $labProjectPath),(Split-Path -Parent $labAssetPath)|Out-Null;[IO.File]::WriteAllText($labProjectPath,'<Project/>',[Text.UTF8Encoding]::new($false));[IO.File]::WriteAllText($labAssetPath,(ConvertTo-Json @{project=@{restore=@{projectPath=$labProjectPath}}} -Compress),[Text.UTF8Encoding]::new($false))
+    $coreLabRunnerScriptPath=Join-Path $assetRoot 'core-lab-runner.ps1';$coreLabRunnerScript=@'
+$projectAssets = @('src/Simulation.Core/obj/project.assets.json', 'tests/Simulation.Core.Tests/obj/project.assets.json', 'tools/Simulation.Core.CalendarDemo/obj/project.assets.json')
+if (-not $SkipLab) { $projectAssets += 'tools/Simulation.Lab/obj/project.assets.json' }
+$inputProjects = @('tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj', 'tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj')
+if (-not $SkipLab) { $inputProjects += 'tools/Simulation.Lab/Simulation.Lab.csproj' }
+$labProject = 'tools/Simulation.Lab/Simulation.Lab.csproj'
+Invoke-Dotnet -Name 'restore-lab-locked' -Arguments @('restore', $labProject, '--locked-mode')
+Invoke-Dotnet -Name 'lab-build' -Arguments @('build', $labProject, '--no-restore', '--configuration', 'Release')
+Invoke-Dotnet -Name 'lab-cold' -Arguments @('run', '--project', $labProject, '--no-build', '--no-restore', '--configuration', 'Release')
+Invoke-Dotnet -Name 'lab-warm' -Arguments @('run', '--project', $labProject, '--no-build', '--no-restore', '--configuration', 'Release')
+'@
+    [IO.File]::WriteAllText($coreLabRunnerScriptPath,$coreLabRunnerScript,[Text.UTF8Encoding]::new($false))
+    $coreLabAssetsRunner=[ordered]@{status=$coreLabPassing.status;testDiscovery=$coreLabPassing.testDiscovery;gates=$coreLabPassing.gates;inputs=[ordered]@{generatedDependencies=@([ordered]@{path='src/Simulation.Core/obj/project.assets.json'},[ordered]@{path='tests/Simulation.Core.Tests/obj/project.assets.json'},[ordered]@{path='tools/Simulation.Core.CalendarDemo/obj/project.assets.json'},[ordered]@{path=$labAssetRelative})}}
+    $coreLabDeclaredAssets=@(& $trxModule {param($r,$script) Get-TrxDeclaredGeneratedDependencyPaths $r $script} $coreLabAssetsRunner $coreLabRunnerScriptPath)
+    Assert-True ($coreLabDeclaredAssets.Count -eq 4 -and $coreLabDeclaredAssets -ccontains $labAssetRelative) 'Core+Lab profile accepts exactly the conditionally declared Lab restore asset'
+    & $trxModule {param($r,$src,$script) Assert-TrxRestoreProjectAssetPaths $r $src $script} $coreLabAssetsRunner $assetRoot $coreLabRunnerScriptPath
+    Assert-True $true 'Core+Lab restore asset resolves to the exact Lab project path'
+    $missingLabAssetRunner=ConvertFrom-Json (ConvertTo-Json $coreLabAssetsRunner -Depth 10 -Compress) -AsHashtable;$missingLabAssetRunner.inputs.generatedDependencies=@($missingLabAssetRunner.inputs.generatedDependencies|Where-Object path -cne $labAssetRelative)
+    Assert-Throws {& $trxModule {param($r,$src,$script) Assert-TrxRestoreProjectAssetPaths $r $src $script} $missingLabAssetRunner $assetRoot $coreLabRunnerScriptPath} 'Core+Lab profile rejects a missing Lab restore asset'
+    [IO.File]::WriteAllText($labAssetPath,(ConvertTo-Json @{project=@{restore=@{projectPath=$testProjectPath}}} -Compress),[Text.UTF8Encoding]::new($false))
+    Assert-Throws {& $trxModule {param($r,$src,$script) Assert-TrxRestoreProjectAssetPaths $r $src $script} $coreLabAssetsRunner $assetRoot $coreLabRunnerScriptPath} 'Core+Lab Lab project.assets rejects a substituted restore project path'
+    [IO.File]::WriteAllText($labAssetPath,(ConvertTo-Json @{project=@{restore=@{projectPath=$labProjectPath}}} -Compress),[Text.UTF8Encoding]::new($false))
+    $unexpectedLabAssetRunner=ConvertFrom-Json (ConvertTo-Json $coreLabAssetsRunner -Depth 10 -Compress) -AsHashtable;$unexpectedLabAssetRunner.inputs.generatedDependencies+=,[ordered]@{path='tools/Simulation.Lab/obj/extra.assets.json'}
+    Assert-Throws {& $trxModule {param($r,$src,$script) Assert-TrxRestoreProjectAssetPaths $r $src $script} $unexpectedLabAssetRunner $assetRoot $coreLabRunnerScriptPath} 'Core+Lab profile rejects an additional generated dependency asset'
+    $legacyDeclaredAssets=@(& $trxModule {param($r,$script) Get-TrxDeclaredGeneratedDependencyPaths $r $script} $assetsRunner $coreLabRunnerScriptPath)
+    Assert-True ($legacyDeclaredAssets.Count -eq 3 -and $legacyDeclaredAssets -notcontains $labAssetRelative) 'legacy Core profile omits conditional Lab assets when its runner has no Lab gates'
     $coreLabWarmMismatch=ConvertFrom-Json (ConvertTo-Json $coreLabPassing -Depth 10 -Compress) -AsHashtable;$coreLabWarmMismatch.gates.labWarm.output=@('scenario fixture','changed result')
     Assert-Throws {& $trxModule {param($r) Assert-TrxCompleteCoreLabRunnerManifest $r} $coreLabWarmMismatch} 'passing Core+Lab profile rejects cold/warm Lab output drift'
     $coreLabLabFailure=ConvertFrom-Json (ConvertTo-Json $coreLabPassing -Depth 10 -Compress) -AsHashtable;$coreLabLabFailure.status='Failed';$coreLabLabFailure.gates.labWarm.exitCode=1

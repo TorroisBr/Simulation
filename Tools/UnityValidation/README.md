@@ -169,6 +169,10 @@ the protected runner manifest. The profile requires the complete Core and Lab ga
 set and binds cold/warm outcomes; unknown, missing, duplicate, or changed artifacts
 fail closed. Its public package declares `runProfile: core-lab-15-artifacts-v1`.
 
+Source validation binds the three fixed Core/test/demo restore assets and adds the
+conditional Lab asset only when the exact Core+Lab gate profile is present. It also
+checks the locked Lab restore, build, cold run, and warm run in the hash-bound runner.
+
 The existing `dotnet-trx-source-context-v1` profile retains its exact 11-log
 allowlist and emits the existing public format without `runProfile`. Both profiles
 reuse the same parser, privacy projection, original comparison, ACL checks, and
