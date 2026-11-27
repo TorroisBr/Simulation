@@ -6190,33 +6190,15 @@ internal sealed class DailyV1Application
         DailyV1ActiveRuntimeSession expectedSession,
         out SimulationRuntimeAdvanceFailure failure)
     {
-        IDailyV1RuntimeAdvanceEvidenceBoundary runtimeBoundary = expectedSession?.RuntimeAdvanceBoundary;
-        failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
-        if (expectedSession == null || runtimeBoundary == null
-            || !ReferenceEquals(activeSessionGate.Current, expectedSession)
-            || !ReferenceEquals(runtimeBoundary.ExecutionState,
-                expectedSession.ExecutionBoundaryState))
-            return false;
-
-        if (!activeSessionGate.TryBeginRuntimeAdvance(
+        if (!TryBeginRuntimeAdvanceReservation(
                 expectedSession,
-                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.RuntimeAdvanceOperation operation))
-        {
-            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
+                out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.RuntimeAdvanceOperation operation,
+                out failure))
             return false;
-        }
 
         using (operation)
-        {
-            if (!ReferenceEquals(operation.ExpectedSession, expectedSession)
-                || !operation.IsOwnedByCurrentThread()
-                || !ReferenceEquals(activeSessionGate.Current, expectedSession))
-                return false;
-
-            return runtimeBoundary is DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary
-                && expectedSession.ExecutionBoundaryState.TryAdvanceSelectedDailyV1Day(
-                    coreBoundary, out failure);
-        }
+            return TryAdvanceDayUnderRuntimeAdvanceReservation(
+                expectedSession, operation, out failure);
     }
 
     /// <summary>
@@ -6698,6 +6680,54 @@ internal sealed class DailyV1Application
                 activeHostProjections.Remove(expectedSession);
             return true;
         }
+    }
+
+    // Internal Core SDK bridge for the fixed observation facade. The same
+    // application reservation used by ordinary advances is held until the
+    // caller finishes its detached copy; no P12 operation scope is added.
+    internal DailyV1ActiveRuntimeSession CurrentRuntimeSession => activeSessionGate.Current;
+
+    internal bool TryBeginRuntimeAdvanceReservation(
+        DailyV1ActiveRuntimeSession expectedSession,
+        out DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.RuntimeAdvanceOperation operation,
+        out SimulationRuntimeAdvanceFailure failure)
+    {
+        operation = null;
+        failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+        IDailyV1RuntimeAdvanceEvidenceBoundary runtimeBoundary = expectedSession?.RuntimeAdvanceBoundary;
+        if (expectedSession == null || runtimeBoundary == null
+            || !ReferenceEquals(activeSessionGate.Current, expectedSession)
+            || !ReferenceEquals(runtimeBoundary.ExecutionState,
+                expectedSession.ExecutionBoundaryState))
+            return false;
+
+        if (!activeSessionGate.TryBeginRuntimeAdvance(expectedSession, out operation))
+        {
+            failure = SimulationRuntimeAdvanceFailure.AdvanceAlreadyInProgress;
+            return false;
+        }
+
+        return true;
+    }
+
+    internal bool TryAdvanceDayUnderRuntimeAdvanceReservation(
+        DailyV1ActiveRuntimeSession expectedSession,
+        DailyV1ApplicationSessionGate<DailyV1ActiveRuntimeSession>.RuntimeAdvanceOperation operation,
+        out SimulationRuntimeAdvanceFailure failure)
+    {
+        IDailyV1RuntimeAdvanceEvidenceBoundary runtimeBoundary = expectedSession?.RuntimeAdvanceBoundary;
+        failure = SimulationRuntimeAdvanceFailure.RuntimeFaulted;
+        if (expectedSession == null || operation == null || runtimeBoundary == null
+            || !ReferenceEquals(operation.ExpectedSession, expectedSession)
+            || !operation.IsOwnedByCurrentThread()
+            || !ReferenceEquals(activeSessionGate.Current, expectedSession)
+            || !ReferenceEquals(runtimeBoundary.ExecutionState,
+                expectedSession.ExecutionBoundaryState))
+            return false;
+
+        return runtimeBoundary is DailyV1CoreSelectedRuntimeAdvanceBoundary coreBoundary
+            && expectedSession.ExecutionBoundaryState.TryAdvanceSelectedDailyV1Day(
+                coreBoundary, out failure);
     }
 
     private bool IsBootstrapOrRestoredDescendant(

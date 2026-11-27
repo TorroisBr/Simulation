@@ -126,6 +126,7 @@
     <Compile Include="DailyV1NpcKnowledgeOwnerTests.cs" Link="Knowledge/DailyV1NpcKnowledgeOwnerTests.cs" />
     <Compile Include="ActionExecutionTests.cs" Link="Application/ActionExecutionTests.cs" />
       <Compile Include="DailyV1ApplicationHostTests.cs" Link="Application/DailyV1ApplicationHostTests.cs" />
+      <Compile Include="DailyV1LabObservationRunTests.cs" Link="Application/DailyV1LabObservationRunTests.cs" />
       <Compile Include="DailyV1ProcessSeparatedP12ContinuationTests.cs" />
       <Compile Include="DailyV1CompatibilityDescriptorFactoryTests.cs" Link="Persistence/DailyV1CompatibilityDescriptorFactoryTests.cs" />
     <Compile Include="DailyV1ApplicationSessionGateTests.cs" Link="Application/DailyV1ApplicationSessionGateTests.cs" />
