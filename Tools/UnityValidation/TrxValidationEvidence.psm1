@@ -695,7 +695,15 @@ function Get-TrxDeclaredGeneratedDependencyPaths {
         if(($expectedGateKeys -join "`n") -cne ($actualGateKeys -join "`n")){throw 'Core+Lab runner gate inventory is not exact.'}
         $labProject='tools/Simulation.Lab/Simulation.Lab.csproj';$labAsset='tools/Simulation.Lab/obj/project.assets.json'
         $normalized=([regex]::Replace($scriptText,'\s+',' ')).Replace('\','/')
-        if(-not $normalized.Contains("`$labProject = '$labProject'") -or -not $normalized.Contains("Invoke-Dotnet -Name 'restore-lab-locked' -Arguments @('restore', `$labProject, '--locked-mode')") -or -not $normalized.Contains("Invoke-Dotnet -Name 'lab-build' -Arguments @('build', `$labProject, '--no-restore', '--configuration', 'Release')") -or -not $normalized.Contains("Invoke-Dotnet -Name 'lab-cold' -Arguments @('run', '--project', `$labProject, '--no-build', '--no-restore', '--configuration', 'Release')") -or -not $normalized.Contains("Invoke-Dotnet -Name 'lab-warm' -Arguments @('run', '--project', `$labProject, '--no-build', '--no-restore', '--configuration', 'Release')")){throw 'Hash-bound runner Lab locked-restore/build/cold/warm commands differ from the closed Core+Lab contract.'}
+        $labProjectReference='$labProject'
+        $expectedLabCommands=@(
+            "Invoke-Dotnet -Name 'restore-lab-locked' -Arguments @('restore', '$labProject', '--locked-mode')",
+            "Invoke-Dotnet -Name 'lab-build' -Arguments @('build', $labProjectReference, '--no-restore', '--configuration', 'Release')",
+            "Invoke-Dotnet -Name 'lab-cold' -Arguments @('run', '--project', $labProjectReference, '--no-build', '--no-restore', '--configuration', 'Release')",
+            "Invoke-Dotnet -Name 'lab-warm' -Arguments @('run', '--project', $labProjectReference, '--no-build', '--no-restore', '--configuration', 'Release')"
+        )
+        if(-not $normalized.Contains("$labProjectReference = '$labProject'")){throw 'Hash-bound runner Lab project identity is unsupported.'}
+        foreach($command in $expectedLabCommands){if(-not $normalized.Contains($command)){throw 'Hash-bound runner Lab locked-restore/build/cold/warm commands differ from the closed Core+Lab contract.'}}
         if(-not [regex]::IsMatch($scriptText,"(?s)if\s*\(\s*-not\s+\`$SkipLab\s*\)\s*\{\s*\`$projectAssets\s*\+=\s*'tools/Simulation\.Lab/obj/project\.assets\.json'\s*\}") -or -not [regex]::IsMatch($scriptText,"(?s)if\s*\(\s*-not\s+\`$SkipLab\s*\)\s*\{\s*\`$inputProjects\s*\+=\s*'tools/Simulation\.Lab/Simulation\.Lab\.csproj'\s*\}")){throw 'Hash-bound runner Lab project and generated dependency declarations are not scoped to the Lab-enabled run.'}
         if($allAppends.Count -ne 1){throw 'Core+Lab runner does not declare exactly one Lab generated dependency append.'}
         $paths.Add($labAsset)

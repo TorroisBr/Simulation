@@ -359,7 +359,7 @@ if (-not $SkipLab) { $projectAssets += 'tools/Simulation.Lab/obj/project.assets.
 $inputProjects = @('tests/Simulation.Core.Tests/Simulation.Core.Tests.csproj', 'tools/Simulation.Core.CalendarDemo/Simulation.Core.CalendarDemo.csproj')
 if (-not $SkipLab) { $inputProjects += 'tools/Simulation.Lab/Simulation.Lab.csproj' }
 $labProject = 'tools/Simulation.Lab/Simulation.Lab.csproj'
-Invoke-Dotnet -Name 'restore-lab-locked' -Arguments @('restore', $labProject, '--locked-mode')
+Invoke-Dotnet -Name 'restore-lab-locked' -Arguments @('restore', 'tools/Simulation.Lab/Simulation.Lab.csproj', '--locked-mode')
 Invoke-Dotnet -Name 'lab-build' -Arguments @('build', $labProject, '--no-restore', '--configuration', 'Release')
 Invoke-Dotnet -Name 'lab-cold' -Arguments @('run', '--project', $labProject, '--no-build', '--no-restore', '--configuration', 'Release')
 Invoke-Dotnet -Name 'lab-warm' -Arguments @('run', '--project', $labProject, '--no-build', '--no-restore', '--configuration', 'Release')
