@@ -364,6 +364,16 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     $coreLabPublicProfile=ConvertFrom-Json (ConvertTo-Json $manifest -Depth 80 -Compress) -AsHashtable;$coreLabPublicProfile.format.runProfile='core-lab-15-artifacts-v1'
     & $trxModule {param($m) Assert-TrxPublicManifest $m} $coreLabPublicProfile
     Assert-True $true 'public manifest accepts the separately versioned Core+Lab profile'
+    $legacyPublicFormat=& $trxModule {Get-TrxPublicFormatForSourceSchema 'dotnet-trx-source-context-v1'}
+    Assert-True (@($legacyPublicFormat.Keys).Count -eq 3 -and -not $legacyPublicFormat.Contains('runProfile')) 'legacy source context keeps the exact three-key public format'
+    $coreLabPublicFormat=& $trxModule {Get-TrxPublicFormatForSourceSchema 'dotnet-trx-core-lab-source-context-v1'}
+    Assert-True (@($coreLabPublicFormat.Keys).Count -eq 4 -and $coreLabPublicFormat.runProfile -ceq 'core-lab-15-artifacts-v1') 'Core+Lab source context emits its exact closed public format'
+    Assert-Throws {& $trxModule {Get-TrxPublicFormatForSourceSchema 'unknown-source-context-v1'}} 'unknown source context cannot select a public package format'
+    $coreLabArchivePath=Join-Path $root 'core-lab-archive-only.zip';[IO.File]::Copy($packageZip,$coreLabArchivePath)
+    $coreLabArchiveManifest=ConvertFrom-Json (ConvertTo-Json $coreLabPublicProfile -Depth 80 -Compress) -AsHashtable;$coreLabArchiveManifest.bundleId='core-lab-archive-only';$coreLabArchiveManifest.archive.file='core-lab-archive-only.zip'
+    $coreLabArchiveManifestPath=Join-Path $root 'core-lab-archive-only.manifest.json';[IO.File]::WriteAllBytes($coreLabArchiveManifestPath,(ConvertTo-EvidenceJsonBytes $coreLabArchiveManifest))
+    $coreLabArchiveVerification=Test-DotNetTrxEvidencePackage -ManifestPath $coreLabArchiveManifestPath -ArchivePath $coreLabArchivePath
+    Assert-True ($coreLabArchiveVerification.IsValid -and $coreLabArchiveVerification.OriginalComparison -ceq 'originalComparisonNotPerformed') 'Core+Lab public archive verifies without private context and states comparison was not performed'
     $unknownPublicProfile=ConvertFrom-Json (ConvertTo-Json $coreLabPublicProfile -Depth 80 -Compress) -AsHashtable;$unknownPublicProfile.format.runProfile='core-lab-any-count-v1'
     Assert-Throws {& $trxModule {param($m) Assert-TrxPublicManifest $m} $unknownPublicProfile} 'public manifest rejects an unknown Core+Lab profile'
     $coreLabProfileExtraKey=ConvertFrom-Json (ConvertTo-Json $coreLabPublicProfile -Depth 80 -Compress) -AsHashtable;$coreLabProfileExtraKey.format.extra='unexpected'

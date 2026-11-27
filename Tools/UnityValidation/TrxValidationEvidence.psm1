@@ -1238,6 +1238,14 @@ function Assert-DotNetTrxContextBinding {
     return $true
 }
 
+function Get-TrxPublicFormatForSourceSchema {
+    param([string]$Schema)
+    $format=[ordered]@{reportProfile=$script:TrxProfile;counterProfile=$script:TrxCounterProfile;projectionPolicy=$script:TrxProjection}
+    if($Schema -ceq $script:TrxCoreLabSourceContextSchema){$format.runProfile=$script:TrxCoreLabRunProfile}
+    elseif($Schema -cne 'dotnet-trx-source-context-v1'){throw 'TRX source-context schema has no public package profile.'}
+    return $format
+}
+
 function New-DotNetTrxEvidencePackage {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string[]]$SourceContextPath,[Parameter(Mandatory)][string]$OutputDirectory,[string]$BundleId)
@@ -1275,8 +1283,7 @@ function New-DotNetTrxEvidencePackage {
     $run.discovery=[ordered]@{count=[int]$runner.testDiscovery.count;cases=@($runner.testDiscovery.cases)}
     if(-not $BundleId){$BundleId=[Guid]::NewGuid().ToString('N')};if($BundleId -notmatch '^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$'){throw 'BundleId may contain only letters, digits, period, underscore, or hyphen.'}
     $archiveName="$BundleId.zip"
-    $format=[ordered]@{reportProfile=$script:TrxProfile;counterProfile=$script:TrxCounterProfile;projectionPolicy=$script:TrxProjection}
-    if($context.schema -ceq $script:TrxCoreLabSourceContextSchema){$format.runProfile=$script:TrxCoreLabRunProfile}
+    $format=Get-TrxPublicFormatForSourceSchema $context.schema
     $manifest=[ordered]@{schema='validation-evidence-trx-package-v1';bundleId=$BundleId;format=$format;tool=(Get-TrxToolIdentity);archive=[ordered]@{file=$archiveName;bytes=0;sha256='0'*64;format='zip-deflate-fixed-1980-01-01';entryPolicy='normalized-trx-only'};runs=@($run)}
     $manifestBytes=ConvertTo-EvidenceJsonBytes $manifest;Test-PublicEvidenceText ([Text.UTF8Encoding]::new($false,$true).GetString($manifestBytes))
     $zipPath=Join-Path ([IO.Path]::GetFullPath($OutputDirectory)) $archiveName;$manifestPath=[IO.Path]::ChangeExtension($zipPath,'.manifest.json')
