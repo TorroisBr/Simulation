@@ -4,6 +4,12 @@
     "net8.0": {
       "simulation.core": {
         "type": "Project"
+      },
+      "simulation.dailyv1.dotnethostidentity": {
+        "type": "Project",
+        "dependencies": {
+          "Simulation.Core": "[1.0.0, )"
+        }
       }
     }
   }

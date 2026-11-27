@@ -3,7 +3,19 @@ using System.Globalization;
 
 internal static class Program
 {
-    private static int Main()
+    internal static int Main(string[] args)
+    {
+        if (args == null || args.Length == 0)
+            return RunFiniteSourceScenario();
+
+        if (DailyV1ObservationCommand.TryParseArguments(args, out string outputDirectory))
+            return DailyV1ObservationCommand.Run(outputDirectory);
+
+        Console.Error.WriteLine("usage: Simulation.Lab [observe-daily --out <new-directory>]");
+        return 2;
+    }
+
+    private static int RunFiniteSourceScenario()
     {
         try
         {

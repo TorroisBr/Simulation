@@ -15,6 +15,7 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <ProjectReference Include="../../src/Simulation.Core/Simulation.Core.csproj" />
     <ProjectReference Include="../../src/Simulation.DailyV1.DotNetHostIdentity/Simulation.DailyV1.DotNetHostIdentity.csproj" />
+    <ProjectReference Include="../../tools/Simulation.Lab/Simulation.Lab.csproj" />
     <ProjectReference Include="../../Tools/Simulation.Core.DailyV1ProcessHost/Simulation.Core.DailyV1ProcessHost.csproj" ReferenceOutputAssembly="false" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/NUMERIC_ORACLE_VECTORS.csv" Link="Fixtures/CORE_F_NUMERIC_ORACLE_VECTORS.csv" CopyToOutputDirectory="PreserveNewest" />
     <None Include="../../docs/validation/CORE_F_SharedRuntimeSource/JSON_PAYLOAD_ORACLE.csv" Link="Fixtures/CORE_F_JSON_PAYLOAD_ORACLE.csv" CopyToOutputDirectory="PreserveNewest" />
@@ -97,7 +98,6 @@
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceParityVectors.cs" Link="Economy/MarketPriceParityVectors.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/MarketPriceCalculatorParityTests.cs" Link="Economy/MarketPriceCalculatorParityTests.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceProductionKernelTests.cs" Link="Economy/FiniteSourceProductionKernelTests.cs" />
-    <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs" Link="Economy/FiniteSourceScenarioParityVectors.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioRuntimeTests.cs" Link="Economy/FiniteSourceScenarioRuntimeTests.cs" />
     <Compile Include="DailyV1MixedSourceProfileAdmissionTests.cs" Link="Economy/DailyV1MixedSourceProfileAdmissionTests.cs" />
       <Compile Include="DailyV1DefinitionIdentityTests.cs" Link="Definitions/DailyV1DefinitionIdentityTests.cs" />
@@ -152,6 +152,7 @@
       <Compile Include="Genealogy/GenealogyOwnerTests.cs" Link="Genealogy/GenealogyOwnerTests.cs" />
       <Compile Include="P12AFPoliticalKnowledgeOwnerCodecTests.cs" Link="Persistence/P12AFPoliticalKnowledgeOwnerCodecTests.cs" />
     <Compile Include="Persistence/P12AGenealogyOwnerCodecTests.cs" Link="Persistence/P12AGenealogyOwnerCodecTests.cs" />
+    <Compile Include="DailyV1LabObservationProducerTests.cs" Link="Lab/DailyV1LabObservationProducerTests.cs" />
   </ItemGroup>
   <Target Name="CopyDailyV1ProcessHostForTests" AfterTargets="Build">
     <ItemGroup>

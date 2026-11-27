@@ -1,0 +1,59 @@
+{
+  "schema": "labobs-a-producer-output-summary-v1",
+  "source": {
+    "commit": "4dd2c2db755b5a86e003933e65e0a5bf9b02f3df",
+    "committedTree": "e9a1e485834507339ec875a90f06bc7417daf291",
+    "workingTreeInputDigest": "288e0c18dc7bdd59e33f5adecfcf4febebfdd457fe33805f78c2a4aecb73ddb5",
+    "coreValidationRunId": "390de45267554676a8ec529dc569eae5"
+  },
+  "validation": {
+    "profile": "core-lab-15-artifacts-v1",
+    "coldTests": {
+      "passed": 1241,
+      "failed": 0
+    },
+    "warmTests": {
+      "passed": 1241,
+      "failed": 0
+    },
+    "libraryAbsent": true,
+    "originalComparisonVerified": true,
+    "archiveSha256": "e2f915d872d7a1db09e13f1990c1dc81700f68abe12fdea07495c80b441fb593",
+    "manifestSha256": "6d7fd28e66f046838d970d39d909f2f3cc7f724eb50f1c053a663f8f7f452031"
+  },
+  "producer": {
+    "profile": "atlas.daily-map-stock/v1",
+    "observationCount": 2,
+    "dayAdvance": 1,
+    "sequenceAdvance": 1,
+    "sameWorldRunBuildAndInputFingerprint": true,
+    "predecessorDigestChainVerified": true,
+    "cityRowsPerObservation": [
+      2,
+      2
+    ],
+    "allCityP8BindingsNull": true,
+    "stockItem": "TRIGO",
+    "stockDelta": 30,
+    "geographyHexCounts": [
+      1,
+      1
+    ],
+    "geographyLocationCounts": [
+      1,
+      1
+    ]
+  },
+  "outputs": [
+    {
+      "file": "0000.atlas-observation.json",
+      "bytes": 1492,
+      "sha256": "6d0bbe954296c63aefc75e840ac2b9911b75f3230245065c87030bb30a42e977"
+    },
+    {
+      "file": "0001.atlas-observation.json",
+      "bytes": 1555,
+      "sha256": "2ce0a22066fa4df9c4430c6a30d23e3faa3f630af285a075d5dc50f33bf15402"
+    }
+  ]
+}

@@ -80,6 +80,13 @@
         "dependencies": {
           "Simulation.Core": "[1.0.0, )"
         }
+      },
+      "simulation.lab": {
+        "type": "Project",
+        "dependencies": {
+          "Simulation.Core": "[1.0.0, )",
+          "Simulation.DailyV1.DotNetHostIdentity": "[1.0.0, )"
+        }
       }
     }
   }

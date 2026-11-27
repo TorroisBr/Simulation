@@ -10,7 +10,10 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Simulation.Core/Simulation.Core.csproj" />
+    <ProjectReference Include="../../src/Simulation.DailyV1.DotNetHostIdentity/Simulation.DailyV1.DotNetHostIdentity.csproj" />
     <Compile Include="Program.cs" />
+    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="DailyV1ObservationProducer.cs" />
     <Compile Include="../../Assets/_Project/Tests/EditMode/Editor/Core/FiniteSourceScenarioParityVectors.cs" Link="Vectors/FiniteSourceScenarioParityVectors.cs" />
   </ItemGroup>
 </Project>
