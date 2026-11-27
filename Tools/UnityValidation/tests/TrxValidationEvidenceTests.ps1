@@ -296,6 +296,7 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     Assert-True $true 'all three generated project assets bind to the captured Core/test/demo source projects'
     [IO.File]::WriteAllText($demoAssets,(ConvertTo-Json @{project=@{restore=@{projectPath=$testProjectPath}}} -Compress))
     Assert-Throws { & $trxModule {param($r,$src,$script) Assert-TrxRestoreProjectAssetPaths $r $src $script} $assetsRunner $assetRoot $runnerScript } 'project.assets restore path substitution rejects'
+    [IO.File]::WriteAllText($demoAssets,(ConvertTo-Json @{project=@{restore=@{projectPath=$demoProjectPath}}} -Compress))
 
     $contextRoot=Join-Path $root 'private-context';$null=Set-ProtectedEvidenceDirectory $contextRoot
     $runnerPath=Join-Path $contextRoot 'runner-manifest.json';[IO.File]::WriteAllText($runnerPath,'{}',[Text.UTF8Encoding]::new($false))
