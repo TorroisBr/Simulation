@@ -441,6 +441,7 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
         foreach($name in $LogNames){$path=Join-Path $FixtureRoot $name;$bytes=[Text.Encoding]::UTF8.GetBytes("profile fixture log $name");[IO.File]::WriteAllBytes($path,$bytes);$logArtifacts.Add([ordered]@{file=$name;bytes=$bytes.Length;sha256=(Get-BytesSha256 $bytes)})}
         $runner=[ordered]@{runId=$runnerId;gates=[ordered]@{coldTests=[ordered]@{resultFile='CoreTests-cold.trx';runId='00000000-0000-0000-0000-000000000001'};warmTests=[ordered]@{resultFile='CoreTests-warm.trx';runId='00000000-0000-0000-0000-000000000002'}};artifacts=[ordered]@{reports=@($reportArtifacts.ToArray());logs=@($logArtifacts.ToArray())}}
         $context=[ordered]@{schema=$ContextSchema;reports=@($privateReports.ToArray())}
+        $runner=ConvertFrom-Json (ConvertTo-Json $runner -Depth 20 -Compress) -AsHashtable;$context=ConvertFrom-Json (ConvertTo-Json $context -Depth 20 -Compress) -AsHashtable
         return [pscustomobject]@{Root=$FixtureRoot;Runner=$runner;Context=$context}
     }
     $legacyLogNames=@('sdk-version.log','dotnet-info.log','dotnet-runtimes.log','restore-tests-locked.log','restore-demo-locked.log','cold-build.log','list-tests.log','cold-test.log','warm-test.log','cold-demo.log','warm-demo.log')
