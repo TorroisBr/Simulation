@@ -430,7 +430,7 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     function New-TrxRunnerArtifactProfileFixture {
         param([string]$FixtureRoot,[string]$ContextSchema,[string[]]$LogNames)
         $null=Set-ProtectedEvidenceDirectory -Path $FixtureRoot
-        $runnerId='c'*32;$reportDirectory=Join-Path $FixtureRoot $runnerId;New-Item -ItemType Directory -Path $reportDirectory -Force|Out-Null
+        $runnerId='c'*32;$reportDirectory=Join-Path $FixtureRoot $runnerId;New-Item -ItemType Directory -Path $reportDirectory -Force|Out-Null;$null=Set-ProtectedEvidenceDirectory -Path $reportDirectory
         $reportArtifacts=[Collections.Generic.List[object]]::new();$privateReports=[Collections.Generic.List[object]]::new()
         foreach($label in @('cold','warm')){
             $name="CoreTests-$label.trx";$runId=if($label -eq 'cold'){'00000000-0000-0000-0000-000000000001'}else{'00000000-0000-0000-0000-000000000002'}
