@@ -105,8 +105,8 @@ pwsh -NoProfile -File .\Tools\UnityValidation\tests\Package-UnityValidationEvide
 
 The shared packager also supports the reviewed closed `trx-vstest-flat-v1` profile.
 The existing Unity/NUnit behavior remains the default. TRX callers must explicitly
-select `-ReportFormat DotNetTrx` and provide the private
-`dotnet-trx-source-context-v1` adapter context through `-RunManifestPath`:
+select `-ReportFormat DotNetTrx` and provide one of the closed private source
+contexts through `-RunManifestPath`:
 
 ```powershell
 .\Tools\UnityValidation\Package-UnityValidationEvidence.ps1 `
@@ -155,6 +155,25 @@ Every captured dirty or untracked source influence must also match a byte/hash
 record in the original source or generated-dependency inventory.
 Original TRX timestamp offsets are converted to UTC only for chronology checks;
 the retained original report bytes and their recorded timestamps are preserved.
+
+### Core+Lab 15-artifact source profile
+
+The versioned `dotnet-trx-core-lab-source-context-v1` profile accepts only the
+`simulation-core-validation/v1` Core+Lab runner inventory: the two named cold/warm
+TRX reports and these 15 exact command logs: `sdk-version.log`, `dotnet-info.log`,
+`dotnet-runtimes.log`, `restore-tests-locked.log`, `restore-demo-locked.log`,
+`restore-lab-locked.log`, `cold-build.log`, `list-tests.log`, `cold-test.log`,
+`warm-test.log`, `cold-demo.log`, `warm-demo.log`, `lab-build.log`, `lab-cold.log`,
+and `lab-warm.log`. Each original is checked against the byte count and SHA-256 in
+the protected runner manifest. The profile requires the complete Core and Lab gate
+set and binds cold/warm outcomes; unknown, missing, duplicate, or changed artifacts
+fail closed. Its public package declares `runProfile: core-lab-15-artifacts-v1`.
+
+The existing `dotnet-trx-source-context-v1` profile retains its exact 11-log
+allowlist and emits the existing public format without `runProfile`. Both profiles
+reuse the same parser, privacy projection, original comparison, ACL checks, and
+deterministic archive writer. Packaging reads original evidence and emits only the
+normalized cold/warm TRX pair; it never rewrites source manifests, raw TRX, or logs.
 
 The public manifest is a closed whitelist. Original TRX and runner-manifest bytes
 stay in verified owner-only local retention and are never included in the public

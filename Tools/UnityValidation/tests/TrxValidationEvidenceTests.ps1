@@ -132,7 +132,7 @@ try {
     Assert-Throws { Write-DeterministicEvidenceArchive -Path (Join-Path $root 'duplicate.zip') -Entries @([ordered]@{name='results/run/cold.trx';bytes=$xmlBytes},[ordered]@{name='results/run/cold.trx';bytes=$xmlBytes}) } 'duplicate ZIP entry rejects'
 
     $missingRunProfileManifest=[ordered]@{format=[ordered]@{reportProfile='trx-vstest-flat-v1'}}
-    $minimalPrivate=[pscustomobject]@{Context=[ordered]@{runtimeSelectionTraces=@()};Runner=[ordered]@{};Root=$root}
+    $minimalPrivate=[pscustomobject]@{Context=[ordered]@{schema='dotnet-trx-source-context-v1';runtimeSelectionTraces=@()};Runner=[ordered]@{};Root=$root}
     $emptyEntries=[Collections.Generic.Dictionary[string,byte[]]]::new([StringComparer]::Ordinal)
     $contextBindingError=$null
     try {
@@ -337,10 +337,37 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
     $completeRunner=[ordered]@{status='Failed';testDiscovery=[ordered]@{count=1;cases=@('case')};gates=[ordered]@{coldBuild=[ordered]@{exitCode=1;elapsedMilliseconds=2};coldTests=[ordered]@{exitCode=1;elapsedMilliseconds=2;resultFile='CoreTests-cold.trx';runId='a';runName='cold';summaryOutcome='Failed';counters=@{};cases=@('case')};warmTests=[ordered]@{exitCode=1;elapsedMilliseconds=2;resultFile='CoreTests-warm.trx';runId='b';runName='warm';summaryOutcome='Failed';counters=@{};cases=@('case')};coldDemo=[ordered]@{exitCode=1;elapsedMilliseconds=2;output=@('fail')};warmDemo=[ordered]@{exitCode=1;elapsedMilliseconds=2;output=@('fail')}}}
     & $trxModule {param($r) Assert-TrxCompleteRunnerManifest $r} $completeRunner
     Assert-True $true 'complete nonpassing runner context remains packageable'
+    $coreLabRunner=ConvertFrom-Json (ConvertTo-Json $completeRunner -Depth 10 -Compress) -AsHashtable
+    $coreLabRunner.gates.labBuild=[ordered]@{exitCode=0;elapsedMilliseconds=3;output=@('Build succeeded.')}
+    $coreLabRunner.gates.labCold=[ordered]@{exitCode=0;elapsedMilliseconds=2;output=@('scenario fixture','day=1 applied')}
+    $coreLabRunner.gates.labWarm=[ordered]@{exitCode=0;elapsedMilliseconds=1;output=@('scenario fixture','day=1 applied')}
+    & $trxModule {param($r) Assert-TrxCompleteCoreLabRunnerManifest $r} $coreLabRunner
+    Assert-True $true 'Core+Lab profile validates complete Lab gates and cold/warm output'
+    $coreLabMissingGate=ConvertFrom-Json (ConvertTo-Json $coreLabRunner -Depth 10 -Compress) -AsHashtable;$coreLabMissingGate.gates.Remove('labWarm')
+    Assert-Throws {& $trxModule {param($r) Assert-TrxCompleteCoreLabRunnerManifest $r} $coreLabMissingGate} 'Core+Lab profile rejects a missing Lab gate'
+    $coreLabUnexpectedGate=ConvertFrom-Json (ConvertTo-Json $coreLabRunner -Depth 10 -Compress) -AsHashtable;$coreLabUnexpectedGate.gates.extra=[ordered]@{exitCode=0;elapsedMilliseconds=0;output=@('unexpected')}
+    Assert-Throws {& $trxModule {param($r) Assert-TrxCompleteCoreLabRunnerManifest $r} $coreLabUnexpectedGate} 'Core+Lab profile rejects an additional gate'
+    $coreLabPassing=ConvertFrom-Json (ConvertTo-Json $coreLabRunner -Depth 10 -Compress) -AsHashtable;$coreLabPassing.status='Passed';foreach($gate in $coreLabPassing.gates.Values){$gate.exitCode=0}
+    & $trxModule {param($r) Assert-TrxCompleteCoreLabRunnerManifest $r} $coreLabPassing
+    Assert-True $true 'Core+Lab profile accepts a complete passing cold/warm run'
+    $coreLabWarmMismatch=ConvertFrom-Json (ConvertTo-Json $coreLabPassing -Depth 10 -Compress) -AsHashtable;$coreLabWarmMismatch.gates.labWarm.output=@('scenario fixture','changed result')
+    Assert-Throws {& $trxModule {param($r) Assert-TrxCompleteCoreLabRunnerManifest $r} $coreLabWarmMismatch} 'passing Core+Lab profile rejects cold/warm Lab output drift'
+    $coreLabLabFailure=ConvertFrom-Json (ConvertTo-Json $coreLabPassing -Depth 10 -Compress) -AsHashtable;$coreLabLabFailure.status='Failed';$coreLabLabFailure.gates.labWarm.exitCode=1
+    & $trxModule {param($r) Assert-TrxCompleteCoreLabRunnerManifest $r} $coreLabLabFailure
+    Assert-True $true 'Core+Lab profile binds a nonpassing Lab gate to the failed overall run'
+    $coreLabFalsePass=ConvertFrom-Json (ConvertTo-Json $coreLabLabFailure -Depth 10 -Compress) -AsHashtable;$coreLabFalsePass.status='Passed'
+    Assert-Throws {& $trxModule {param($r) Assert-TrxCompleteCoreLabRunnerManifest $r} $coreLabFalsePass} 'Core+Lab profile rejects a passing status with a failed Lab gate'
     $incompleteRunner=ConvertFrom-Json (ConvertTo-Json $completeRunner -Depth 10 -Compress) -AsHashtable;$incompleteRunner.gates.Remove('warmDemo')
     Assert-Throws { & $trxModule {param($r) Assert-TrxCompleteRunnerManifest $r} $incompleteRunner } 'incomplete nonpassing runner context rejects'
     $formatMutation=ConvertFrom-Json (ConvertTo-Json $manifest -Depth 80 -Compress) -AsHashtable;$formatMutation.archive.format='zip'
     Assert-Throws { & $trxModule {param($m) Assert-TrxPublicManifest $m} $formatMutation } 'archive format mutation rejects'
+    $coreLabPublicProfile=ConvertFrom-Json (ConvertTo-Json $manifest -Depth 80 -Compress) -AsHashtable;$coreLabPublicProfile.format.runProfile='core-lab-15-artifacts-v1'
+    & $trxModule {param($m) Assert-TrxPublicManifest $m} $coreLabPublicProfile
+    Assert-True $true 'public manifest accepts the separately versioned Core+Lab profile'
+    $unknownPublicProfile=ConvertFrom-Json (ConvertTo-Json $coreLabPublicProfile -Depth 80 -Compress) -AsHashtable;$unknownPublicProfile.format.runProfile='core-lab-any-count-v1'
+    Assert-Throws {& $trxModule {param($m) Assert-TrxPublicManifest $m} $unknownPublicProfile} 'public manifest rejects an unknown Core+Lab profile'
+    $coreLabProfileExtraKey=ConvertFrom-Json (ConvertTo-Json $coreLabPublicProfile -Depth 80 -Compress) -AsHashtable;$coreLabProfileExtraKey.format.extra='unexpected'
+    Assert-Throws {& $trxModule {param($m) Assert-TrxPublicManifest $m} $coreLabProfileExtraKey} 'Core+Lab public profile rejects an additional format key'
     $errorClaim=ConvertFrom-Json (ConvertTo-Json $manifest -Depth 80 -Compress) -AsHashtable;$attempt=$errorClaim.runs[0].attempts[0];$attempt.caseOutcomeCounts.Error=2;$attempt.caseOutcomeCounts.Passed=0;$attempt.summaryOutcome='Failed';$attempt.nativeCounters.executed='0';$attempt.nativeCounters.passed='0';$attempt.nativeCounters.failed='0';$attempt.gatePassed=$false
     & $trxModule {param($m) Assert-TrxPublicManifest $m} $errorClaim
     Assert-True $true 'complete Error outcome preserves native failed and executed counters as zero'
@@ -388,5 +415,51 @@ Chose FX version [C:\Program Files\dotnet\shared\Microsoft.NETCore.App\9.0.20]
         Read-DotNetTrxSourceContext $path
     } $contextOutputPath)
     Assert-True ($contextOutputResult.Count -eq 1 -and $contextOutputResult[0].PSObject.Properties.Name -contains 'Context' -and $contextOutputResult[0].Context.schema -ceq 'dotnet-trx-source-context-v1') 'successful private source-context reader returns one context object without assertion output leakage'
+    $coreLabContextOutput=ConvertFrom-Json (ConvertTo-Json $contextOutput -Depth 20 -Compress) -AsHashtable;$coreLabContextOutput.schema='dotnet-trx-core-lab-source-context-v1'
+    $coreLabContextOutputPath=Join-Path $contextOutputRoot 'core-lab-source-context.json';[IO.File]::WriteAllBytes($coreLabContextOutputPath,(ConvertTo-EvidenceJsonBytes $coreLabContextOutput))
+    $coreLabContextResult=@(& $trxModule {
+        param($path)
+        function Assert-TrxCompleteCoreLabRunnerManifest { param($Runner) }
+        function Assert-TrxRunnerInputInventory { param($Runner,$WorktreeRoots) return 'synthetic-source-root' }
+        function Assert-TrxRunnerArtifactEvidence { param($Context,$Runner,$ProtectedRoot) return $true }
+        function Assert-TrxLoggerEvidence { param($Record,$ProtectedRoot) return $true }
+        Read-DotNetTrxSourceContext $path
+    } $coreLabContextOutputPath)
+    Assert-True ($coreLabContextResult.Count -eq 1 -and $coreLabContextResult[0].Context.schema -ceq 'dotnet-trx-core-lab-source-context-v1') 'versioned Core+Lab source context is read without changing the legacy context schema'
+
+    function New-TrxRunnerArtifactProfileFixture {
+        param([string]$FixtureRoot,[string]$ContextSchema,[string[]]$LogNames)
+        $null=Set-ProtectedEvidenceDirectory -Path $FixtureRoot
+        $runnerId='c'*32;$reportDirectory=Join-Path $FixtureRoot $runnerId;New-Item -ItemType Directory -Path $reportDirectory -Force|Out-Null
+        $reportArtifacts=[Collections.Generic.List[object]]::new();$privateReports=[Collections.Generic.List[object]]::new()
+        foreach($label in @('cold','warm')){
+            $name="CoreTests-$label.trx";$runId=if($label -eq 'cold'){'00000000-0000-0000-0000-000000000001'}else{'00000000-0000-0000-0000-000000000002'}
+            $path=Join-Path $reportDirectory $name;$bytes=[Text.Encoding]::UTF8.GetBytes("profile fixture $label");[IO.File]::WriteAllBytes($path,$bytes);$hash=Get-BytesSha256 $bytes
+            $reportArtifacts.Add([ordered]@{file=$name;bytes=$bytes.Length;sha256=$hash});$privateReports.Add([ordered]@{label=$label;path=$path;bytes=$bytes.Length;sha256=$hash;nativeRunId=$runId})
+        }
+        $logArtifacts=[Collections.Generic.List[object]]::new()
+        foreach($name in $LogNames){$path=Join-Path $FixtureRoot $name;$bytes=[Text.Encoding]::UTF8.GetBytes("profile fixture log $name");[IO.File]::WriteAllBytes($path,$bytes);$logArtifacts.Add([ordered]@{file=$name;bytes=$bytes.Length;sha256=(Get-BytesSha256 $bytes)})}
+        $runner=[ordered]@{runId=$runnerId;gates=[ordered]@{coldTests=[ordered]@{resultFile='CoreTests-cold.trx';runId='00000000-0000-0000-0000-000000000001'};warmTests=[ordered]@{resultFile='CoreTests-warm.trx';runId='00000000-0000-0000-0000-000000000002'}};artifacts=[ordered]@{reports=@($reportArtifacts.ToArray());logs=@($logArtifacts.ToArray())}}
+        $context=[ordered]@{schema=$ContextSchema;reports=@($privateReports.ToArray())}
+        return [pscustomobject]@{Root=$FixtureRoot;Runner=$runner;Context=$context}
+    }
+    $legacyLogNames=@('sdk-version.log','dotnet-info.log','dotnet-runtimes.log','restore-tests-locked.log','restore-demo-locked.log','cold-build.log','list-tests.log','cold-test.log','warm-test.log','cold-demo.log','warm-demo.log')
+    $coreLabLogNames=@('sdk-version.log','dotnet-info.log','dotnet-runtimes.log','restore-tests-locked.log','restore-demo-locked.log','restore-lab-locked.log','cold-build.log','list-tests.log','cold-test.log','warm-test.log','cold-demo.log','warm-demo.log','lab-build.log','lab-cold.log','lab-warm.log')
+    $legacyArtifactFixture=New-TrxRunnerArtifactProfileFixture (Join-Path $root 'legacy-11-artifacts') 'dotnet-trx-source-context-v1' $legacyLogNames
+    $legacyArtifactValid=& $trxModule {param($c,$r,$root) Assert-TrxRunnerArtifactEvidence $c $r $root} $legacyArtifactFixture.Context $legacyArtifactFixture.Runner $legacyArtifactFixture.Root
+    Assert-True ([bool]$legacyArtifactValid) 'legacy 11-artifact source-context profile remains byte-verifiable'
+    $coreLabArtifactFixture=New-TrxRunnerArtifactProfileFixture (Join-Path $root 'core-lab-15-artifacts') 'dotnet-trx-core-lab-source-context-v1' $coreLabLogNames
+    $coreLabArtifactValid=& $trxModule {param($c,$r,$root) Assert-TrxRunnerArtifactEvidence $c $r $root} $coreLabArtifactFixture.Context $coreLabArtifactFixture.Runner $coreLabArtifactFixture.Root
+    Assert-True ([bool]$coreLabArtifactValid) 'exact 15-artifact Core+Lab profile verifies report and log bytes/hashes'
+    $missingCoreLabArtifact=ConvertFrom-Json (ConvertTo-Json $coreLabArtifactFixture.Runner -Depth 20 -Compress) -AsHashtable;$missingCoreLabArtifact.artifacts.logs=@($missingCoreLabArtifact.artifacts.logs|Where-Object file -cne 'lab-warm.log')
+    Assert-Throws {& $trxModule {param($c,$r,$root) Assert-TrxRunnerArtifactEvidence $c $r $root} $coreLabArtifactFixture.Context $missingCoreLabArtifact $coreLabArtifactFixture.Root} 'Core+Lab profile rejects a missing log artifact'
+    $extraCoreLabArtifact=ConvertFrom-Json (ConvertTo-Json $coreLabArtifactFixture.Runner -Depth 20 -Compress) -AsHashtable;$extraPath=Join-Path $coreLabArtifactFixture.Root 'unapproved-extra.log';$extraBytes=[Text.Encoding]::UTF8.GetBytes('unexpected');[IO.File]::WriteAllBytes($extraPath,$extraBytes);$extraCoreLabArtifact.artifacts.logs=@($extraCoreLabArtifact.artifacts.logs)+@([ordered]@{file='unapproved-extra.log';bytes=$extraBytes.Length;sha256=(Get-BytesSha256 $extraBytes)})
+    Assert-Throws {& $trxModule {param($c,$r,$root) Assert-TrxRunnerArtifactEvidence $c $r $root} $coreLabArtifactFixture.Context $extraCoreLabArtifact $coreLabArtifactFixture.Root} 'Core+Lab profile rejects an additional log artifact'
+    $duplicateCoreLabArtifact=ConvertFrom-Json (ConvertTo-Json $coreLabArtifactFixture.Runner -Depth 20 -Compress) -AsHashtable;$duplicateCoreLabArtifact.artifacts.logs=@($duplicateCoreLabArtifact.artifacts.logs|Where-Object file -cne 'lab-warm.log')+@($duplicateCoreLabArtifact.artifacts.logs|Where-Object file -ceq 'lab-cold.log')
+    Assert-Throws {& $trxModule {param($c,$r,$root) Assert-TrxRunnerArtifactEvidence $c $r $root} $coreLabArtifactFixture.Context $duplicateCoreLabArtifact $coreLabArtifactFixture.Root} 'Core+Lab profile rejects duplicate/missing log names'
+    [IO.File]::WriteAllText((Join-Path $coreLabArtifactFixture.Root 'lab-build.log'),'mutated',[Text.UTF8Encoding]::new($false))
+    Assert-Throws {& $trxModule {param($c,$r,$root) Assert-TrxRunnerArtifactEvidence $c $r $root} $coreLabArtifactFixture.Context $coreLabArtifactFixture.Runner $coreLabArtifactFixture.Root} 'Core+Lab profile rejects a changed original log hash'
+    [IO.File]::WriteAllText((Join-Path $coreLabArtifactFixture.Root $coreLabArtifactFixture.Runner.runId 'CoreTests-warm.trx'),'mutated',[Text.UTF8Encoding]::new($false))
+    Assert-Throws {& $trxModule {param($c,$r,$root) Assert-TrxRunnerArtifactEvidence $c $r $root} $coreLabArtifactFixture.Context $coreLabArtifactFixture.Runner $coreLabArtifactFixture.Root} 'Core+Lab profile rejects a changed original report hash'
     Write-Output "TRX evidence synthetic tests PASS: $script:Assertions assertions."
 } finally { Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue }
