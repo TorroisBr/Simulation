@@ -1,6 +1,6 @@
 # Simulation Vertical Slice v1 - Acceptance
 
-**Status date:** 2026-11-27 (America/Sao_Paulo)
+**Status date:** 2026-11-28 (America/Sao_Paulo)
 
 > Sanitized public checklist. Protected observations, private evidence, machine paths, and unreleased source are excluded. Component tests alone do not establish integrated release acceptance.
 
@@ -19,7 +19,7 @@ Accept v1 only after one integrated local product demonstration and required com
 5. Verify Pause, Resume/Play, Slow, Normal, and Fast. Speed changes scheduling only; one accepted operation advances one supported day. No hourly advancement is claimed.
 6. Verify failures present only the latest proven detached view. Shutdown must stop new work, safely settle or fault the owned operation, close the Lab child, and remove only its owned scratch root.
 
-**Status: OPEN.** Core, evidence profile, facade, and official producer/encoder are promoted. ATLAS-B restore is blocked; its current successor has no restore/build/test or real-pair conformance result. Host child work is dispatched, but Atlas controls require ATLAS-B and real producer-reader-Host conformance.
+**Status: OPEN.** Core, evidence profile, facade, and official producer/encoder are promoted. ATLAS-B remains unvalidated: the one authorized project-root attempt using `WorldAtlas.Tests.csproj` failed before project load because PowerShell argument construction corrupted the path (MSB1009), so it did not exercise restore. The authorization is consumed; a corrected invocation needs new authorization. The bounded Host child candidate passed local validation and independent review; Atlas controls still require accepted ATLAS-B validation and real producer-reader-Host conformance.
 
 ### 2. Dungeon Studio and Atlas Dungeon Viewer
 
@@ -29,7 +29,7 @@ Accept v1 only after one integrated local product demonstration and required com
 
 An existing Comb v1 or other supported non-Crypt profile is enough for v1. Crypt v1/v2 are not prerequisites.
 
-**Component status:** User accepted ATLAS-C open/display/integrity for the approved Comb v1 fixture. The screenshot showed validated standalone status, document identity, eight rooms, seven passages, element list, and selected-room Inspector. The user checked integrity after viewing. **Open:** shell Return-to-Demo restoration was not reported; return to selected world in integrated flow is separate. Public promotion is held on Dungeon source-rights evidence.
+**Component status:** User accepted ATLAS-C open/display/integrity for the approved Comb v1 fixture. The screenshot showed validated standalone status, document identity, eight rooms, seven passages, element list, and selected-room Inspector. The user checked integrity after viewing. **Open:** shell Return-to-Demo restoration was not reported; return to selected world in integrated flow is separate. A permitted Computer Use session was stopped by the user with Escape before inspection or UI action, so it produced no new acceptance result and was not a product failure. Public promotion is held on Dungeon source-rights evidence.
 
 ### 3. City Studio and Atlas City Viewer
 
@@ -68,9 +68,9 @@ A distributable containing the Windows ANGLE native dependency must include the 
 | Component | Identity / review | Automated validation | Native acceptance | State |
 |---|---|---|---|---|
 | Core/Lab chain | Promoted Core canonical `02051d1f971f131cc73b1c50976bbd96860c057b`; producer `3eaa62d98faf3fb68958588f04ef25a576ccd0a9` exact-tip review PASS. | CoreValidation 1,241/1,241 cold and warm; eight gates PASS; original comparison and integrity PASS. | Protected real two-cut pair exists; contents/digests omitted. | Promoted; Atlas conformance pending. |
-| ATLAS-B | Local-only successor `a28b1c26379ccbd148d3829b35a3322b2274a20e`; exact-tip static source review PASS/no findings. | Solution and Desktop locked restores exited 1 in graph processing without underlying MSBuild/NuGet error. Current successor has no build/tests. Predecessor `0de71af27a567ce96d49bbf5c219df14d063a2e5` passed focused 4/4 and full 49/49; results do not transfer to `a28b1c26`. | Current successor real producer-reader conformance not run. | Restore blocked; unvalidated. |
-| Interactive Lab Host | Local-only amendment `2612be197c2b128d056d48068d50c831325f5927`, independent review PASS. | Local implementation dispatched; final validation not recorded here. | Atlas integration/native controls await conformance. | Authorized; integration gated. |
-| ATLAS-C | Local-only candidate `68a4c1f760da3c65ce5211b82fd999baf9f0a6df`; exact-tip review PASS. | Locked restores, RID graph checks, Release build, single-file win-x64 publish; direct tests 39/39; six-project package closure 50/50 matching lock metadata. | Open/display/integrity PASS; Return-to-Demo unreported; integrated selected-world return separate. | Native partial; public promotion rights hold. |
+| ATLAS-B | Local-only successor `a28b1c26379ccbd148d3829b35a3322b2274a20e`; exact-tip static source review PASS/no findings. | Solution and Desktop locked restores exited 1 in graph processing without underlying MSBuild/NuGet error. The authorized `WorldAtlas.Tests.csproj` attempt returned MSB1009 before project load due corrupted path argument; restore graph not exercised. Current successor has no build/tests. Predecessor `0de71af27a567ce96d49bbf5c219df14d063a2e5` passed focused 4/4 and full 49/49; results do not transfer to `a28b1c26`. | Current successor real producer-reader conformance not run. | Restore blocked; unvalidated; new authorization required for a corrected attempt. |
+| Interactive Lab Host | Local-only amendment `2612be197c2b128d056d48068d50c831325f5927`; child candidate `9023caa2db6f1bbee2bdf8b013d2aaefc66f3f10`, independent exact-tip review PASS/no findings. | Locked restore and Release net8.0 build PASS; 38/38 focused host regressions; diff check PASS. | Atlas integration/native controls await real producer-reader-Host conformance. | Local child checkpoint PASS; integration gated; .NET 8 is not a supported distribution target. |
+| ATLAS-C | Local-only candidate `68a4c1f760da3c65ce5211b82fd999baf9f0a6df`; exact-tip review PASS. | Locked restores, RID graph checks, Release build, single-file win-x64 publish; direct tests 39/39; six-project package closure 50/50 matching lock metadata. | Open/display/integrity PASS; Return-to-Demo unreported. Computer Use was stopped with Escape before any UI inspection/action; no new result and no product failure. Integrated selected-world return separate. | Native partial; public promotion rights hold. |
 | City Foundation v1 | Local-only candidate `75d72047e56339382b10e39bd7fde941bec40291`; independent implementation review PASS. | Locked restore/build PASS, zero warnings/errors; City.Tests 34/34; Studio.Tests 7/7; self-contained win-x64 publish PASS. | Seeds 0, -1, 21, 42 and interactions/persistence PASS; fresh-process 0/-1 reopen preserved identity, digest, origin, layout without regeneration. | Closed / accepted. |
 | Atlas City Viewer | Local-only design `ac2830876da184d88ef88ec5f32e92e4c0572698`; design and consumer review PASS. | Locked consumer win-x64 restore not qualified. | Viewer open/return not run. | Implementation pending serialized slot. |
 | Crypt v1 | Owner-reported validated implementation; not needed for initial demo. | Reproducibility correction and implementation review PASS. | Pan/zoom/Fit, Save/Reopen, and regeneration comparison for seeds 42 and -21 remain. | Parallel native closure; Crypt v2 deferred. |
@@ -85,10 +85,11 @@ Audited six-project NuGet closure had known license metadata for all 50 packages
 
 ## Remaining gates and next milestone
 
-- ATLAS-B: evidence-based recovery, locked restore/build/tests, real producer-reader conformance, exact-tip review.
-- Host: finish and validate bounded local child implementation; then prove producer-reader-Host conformance before Atlas controls.
+- ATLAS-B: the one authorized project-root attempt was consumed by malformed argument construction before project load; obtain new authorization for any corrected attempt, then establish an architecture-reviewed complete locked restore/build/test route, real producer-reader conformance, and exact-tip validation review.
+- Host: bounded local child checkpoint `9023caa2` is validated and independently reviewed; await the architecture dependency decision, then prove producer-reader-Host conformance before Atlas controls.
 - ATLAS-C: request native Computer Use at a suitable later opportunity for Return-to-Demo; do not infer it from screenshots or treat access denial as product failure.
 - City Viewer: implement only in the reserved serialized Atlas slot; pass locked win-x64 consumer restore before integration.
 - Integrated product: complete viewer/Studio flows, daily controls, latest-proven-view behavior, safe shutdown, supported runtime, notices, and exact manifest.
 
-Next meaningful milestone is an ATLAS-B candidate passing locked restore and validation, followed by real producer-reader-Host conformance. The complete Vertical Slice remains open until the integrated demonstration is user accepted.
+Next meaningful milestone is a newly authorized, correctly formed ATLAS-B project-root diagnostic and an approved complete validation route, followed by real producer-reader-Host conformance. The complete Vertical Slice remains open until the integrated demonstration is user accepted.
+
